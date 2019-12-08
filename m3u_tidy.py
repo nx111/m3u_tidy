@@ -7,9 +7,10 @@ import re
 from zhconv.zhconv import convert
 
 supports=['http','https','rmtp','rstp','ftp']
+playlist=[]
 
 class track():
-    def __init__(self, length, group, name, logo, title, path, fname):
+    def __init__(self, length, group, name, logo, title, path, fname, need):
         self.length = length
         self.group = group
         self.name = name
@@ -17,6 +18,7 @@ class track():
         self.title = title
         self.path = path
         self.fname = fname
+        self.need = need
 
 """
     song info lines are formatted like:
@@ -27,7 +29,7 @@ class track():
     ..\Minus The Bear - Planet of Ice\Minus The Bear_Planet of Ice_01_Burying Luck.mp3
 """
 
-def parsem3u(infile):
+def parsem3u(infile, need):
     try:
         assert(type(infile) == '_io.TextIOWrapper')
     except AssertionError:
@@ -44,8 +46,7 @@ def parsem3u(infile):
        return
 
     # initialize playlist variables before reading file
-    playlist=[]
-    song=track(None,None,None,None,None,None,None)
+    song=track(None,None,None,None,None,None,None,None)
 
     for line in infile:
         line=line.strip()
@@ -54,6 +55,7 @@ def parsem3u(infile):
             paramstr,title=line.split('#EXTINF:')[1].split(',',1)
             paramstr = re.sub("\s\s+", " ",paramstr).strip()
             param = paramstr.split(' ')
+            title = title.strip()
             name = ""
             group = ""
             logo = ""
@@ -73,12 +75,12 @@ def parsem3u(infile):
                     logo = param_value
                 elif param_name == "group-title":
                     group = param_value
-            song=track(length,group,name,logo,title,None,None)
+            song=track(length,group,name,logo,title,None,None,need)
         elif (len(line) != 0):
             # pull song path from all other, non-blank lines
             protocol = line.strip().split('://')[0]
             if protocol not in supports:
-                 song=track(None,None,None,None,None,None,None)
+                 song=track(None,None,None,None,None,None,None,None)
                  continue
             song.path=line
             fpath,fname=os.path.split(line)
@@ -104,7 +106,7 @@ def parsem3u(infile):
             playlist.append(song)
 
             # reset the song variable so it doesn't use the same EXTINF more than once
-            song=track(None,None,None,None,None,None,None)
+            song=track(None,None,None,None,None,None,None,None)
 
     infile.close()
 
@@ -113,12 +115,38 @@ def parsem3u(infile):
 # for now, just pull the track info and print it onscreen
 # get the M3U file path from the first command line argument
 def main():
-    m3ufile=sys.argv[1]
-    outfile=os.path.split(m3ufile)[0] + "/" + os.path.split(m3ufile)[1].split(".")[0] + "-new.m3u"
-    playlist = parsem3u(m3ufile)
+    i = 0
+    lastop = ''
+    reference_m3u = ''
+    for op in sys.argv:
+        if i == 0:
+            i = i + 1
+            continue
+        if lastop == "-r":
+            if os.path.exists(op) and os.path.isfile(op):
+                reference_m3u = op
+        elif op != "-r":
+            m3ufile = op
+        lastop = op 
+   
+    if not os.path.exists(m3ufile) or not os.path.isfile(m3ufile):
+        print("Error: source m3u file %s invalid." % m3ufile)
+        exit()
+
+    outfile=os.path.join(os.path.split(m3ufile)[0], os.path.split(m3ufile)[1].split(".")[0] + "-new.m3u")
+    if reference_m3u != "" and os.path.exists(reference_m3u) and os.path.isfile(reference_m3u):
+        print(F'  Parsing reference m3u :{reference_m3u} ...')
+        playlist = parsem3u(reference_m3u, False)
+
+    print(F'  Parsing input m3u :{m3ufile} ...')
+    playlist = parsem3u(m3ufile, True)
+
+    print(F'  Output new m3u :{outfile} ...')
     out = open(outfile, "w+")
     print("#EXTM3U",file=out)
     for track in playlist:
+        if track.need == False:
+            continue
         info=F'#EXTINF:{track.length} '
         if track.group != '':
             info = info + F' group-title=\"{track.group}\"'
