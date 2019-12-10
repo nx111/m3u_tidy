@@ -52,9 +52,41 @@ def parsem3u(infile, need):
         line=line.strip()
         if line.startswith('#EXTINF:'):
             # pull length and title from #EXTINF line
-            paramstr,title=line.split('#EXTINF:')[1].split(',',1)
-            paramstr = re.sub("\s\s+", " ",paramstr).strip()
-            param = paramstr.split(' ')
+            paramstr = ""
+            title = ""
+            commaing = False
+            isTitle = False
+            item = ""
+            lastchar = ""
+            param = []
+            for c in line.split('#EXTINF:')[1]:
+                 if c == "\"" or c == "\'":
+                     if commaing == False:
+                         commaing = True
+                     else:
+                         commaing = False
+
+                     if isTitle == False:
+                         item = item + c
+                     else:
+                         title = title + c
+                 elif commaing == False and c == ",":
+                     isTitle = True
+                     if item != "":
+                        param.append(item)
+                        item = ""
+                 elif lastchar != "" and lastchar.isspace() and c.isspace():
+                     continue
+                 elif commaing == False and c != "" and c.isspace() and isTitle == False and item != "":
+                     param.append(item)
+                     item = ""
+                 else:
+                     if isTitle == False:
+                         item = item + c
+                     else:
+                         title = title + c
+                 lastchar = c         
+
             title = title.strip()
             name = ""
             group = ""
@@ -82,7 +114,7 @@ def parsem3u(infile, need):
             if protocol not in supports:
                  song=track(None,None,None,None,None,None,None,None)
                  continue
-            song.path=line
+            song.path=re.sub(",.*","",line)
             fpath,fname=os.path.split(line)
             if len(fname) >= 32:
                 song.fname = fname
