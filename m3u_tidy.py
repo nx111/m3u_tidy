@@ -160,7 +160,11 @@ def main():
         elif op != "-r":
             m3ufile = op
         lastop = op 
-   
+
+    if i == 1:
+        print("Usage: python3 ",sys.argv[0],' [-r <reference m3u file>] input.m3u');
+        exit()
+
     if not os.path.exists(m3ufile) or not os.path.isfile(m3ufile):
         print("Error: source m3u file %s invalid." % m3ufile)
         exit()
