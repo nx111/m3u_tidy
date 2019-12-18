@@ -6,7 +6,7 @@ import sys,os
 import re
 from zhconv.zhconv import convert
 
-supports=['http','https','rmtp','rstp','ftp']
+supports=['http','https','rtmp','rstp','ftp']
 playlist=[]
 
 class track():
