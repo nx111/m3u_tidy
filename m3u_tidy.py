@@ -159,7 +159,8 @@ def main():
                 reference_m3u = op
         elif op != "-r":
             m3ufile = op
-        lastop = op 
+        lastop = op
+        i = i + 1
 
     if i == 1:
         print("Usage: python3 ",sys.argv[0],' [-r <reference m3u file>] input.m3u');
