@@ -104,7 +104,7 @@ def parsem3u(infile, need):
                 if param_name == "tvg-name":
                     name = param_value
                 elif param_name == "tvg-logo":
-                    logo = param_value
+                    logo = re.sub(",", "%2C", param_value)
                 elif param_name == "group-title":
                     group = param_value
             song=track(length,group,name,logo,title,None,None,need)
