@@ -181,19 +181,23 @@ def main():
     print(F'  Output new m3u :{outfile} ...')
     out = open(outfile, "w+")
     print("#EXTM3U",file=out)
+    lastgroup = ""
     for track in playlist:
         if track.need == False:
             continue
-        info=F'#EXTINF:{track.length} '
+        info=F'#EXTINF:{track.length}'
         if track.group != '':
             info = info + F' group-title=\"{track.group}\"'
-        if track.name != '':
+        if track.name != '' and track.name != track.title:
             info = info + F' tvg-name=\"{track.name}\"'
         if track.logo != '':
             info = info + F' tvg-logo=\"{track.logo}\"'
         info = info + F', {track.title}'
+        if lastgroup != "" and lastgroup != track.group:
+            print("", file=out)
         print("%s" % info, file=out)
         print("%s" % track.path, file=out)
+        lastgroup = track.group
     out.close()
 
 if __name__ == '__main__':
