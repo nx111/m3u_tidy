@@ -50,10 +50,13 @@ def parsem3u(infile, need):
 
     for line in infile:
         line=line.strip()
-        if line.startswith('#EXTINF:'):
+        if line.startswith('#EXTINF:') or line.startswith('EXTINF:'):
             # pull length and title from #EXTINF line
             paramstr = ""
             title = ""
+            name = ""
+            logo = ""
+            group = ""
             commaing = False
             isTitle = False
             item = ""
@@ -107,6 +110,8 @@ def parsem3u(infile, need):
                     logo = re.sub(",", "%2C", param_value)
                 elif param_name == "group-title":
                     group = param_value
+            if name == "":
+                name = re.sub('台$','', convert(title,"zh-cn"))
             song=track(length,group,name,logo,title,None,None,need)
         elif (len(line) != 0):
             # pull song path from all other, non-blank lines
@@ -172,13 +177,13 @@ def main():
 
     outfile=os.path.join(os.path.split(m3ufile)[0], os.path.split(m3ufile)[1].split(".")[0] + "-new.m3u")
     if reference_m3u != "" and os.path.exists(reference_m3u) and os.path.isfile(reference_m3u):
-        print(F'  Parsing reference m3u :{reference_m3u} ...')
+        print(F'  Parsing reference m3u: {reference_m3u} ...')
         playlist = parsem3u(reference_m3u, False)
 
-    print(F'  Parsing input m3u :{m3ufile} ...')
+    print(F'  Parsing input m3u: {m3ufile} ...')
     playlist = parsem3u(m3ufile, True)
 
-    print(F'  Output new m3u :{outfile} ...')
+    print(F'  Output new m3u: {outfile} ...')
     out = open(outfile, "w+")
     print("#EXTM3U",file=out)
     lastgroup = ""
