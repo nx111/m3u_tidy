@@ -8,6 +8,7 @@ from zhconv.zhconv import convert
 
 supports=['http','https','rtmp','rstp','ftp']
 playlist=[]
+lineEnds='\n'
 
 class track():
     def __init__(self, length, group, name, logo, title, path, fname, need):
@@ -30,10 +31,13 @@ class track():
 """
 
 def parsem3u(infile, need):
+    global lineEnds
+
+    ifile = infile
     try:
         assert(type(infile) == '_io.TextIOWrapper')
     except AssertionError:
-        infile = open(infile,'r')
+        infile = open(infile,'rb')
 
     """
         All M3U files start with #EXTM3U.
@@ -42,12 +46,15 @@ def parsem3u(infile, need):
     """
 
     line = infile.readline()
-    if not line.startswith('#EXTM3U'):
+    if line[0:7] != b'#EXTM3U':
        return
+    if need and line.splitlines(True)[0][-2:-1] == b'\r':
+        lineEnds='\r\n'
 
+    infile.close()
+    infile = open(ifile, 'r')
     # initialize playlist variables before reading file
     song=track(None,None,None,None,None,None,None,None)
-
     for line in infile:
         line=line.strip()
         if line.startswith('#EXTINF:') or line.startswith('EXTINF:'):
@@ -182,10 +189,9 @@ def main():
 
     print(F'  Parsing input m3u: {m3ufile} ...')
     playlist = parsem3u(m3ufile, True)
-
     print(F'  Output new m3u: {outfile} ...')
     out = open(outfile, "w+")
-    print("#EXTM3U",file=out)
+    print("#EXTM3U", end=lineEnds, file=out)
     lastgroup = ""
     for track in playlist:
         if track.need == False:
@@ -199,9 +205,9 @@ def main():
             info = info + F' tvg-logo=\"{track.logo}\"'
         info = info + F', {track.title}'
         if lastgroup != "" and lastgroup != track.group:
-            print("", file=out)
-        print("%s" % info, file=out)
-        print("%s" % track.path, file=out)
+            print("", end=lineEnds, file=out)
+        print("%s" % info, end=lineEnds, file=out)
+        print("%s" % track.path, end=lineEnds, file=out)
         lastgroup = track.group
     out.close()
 
