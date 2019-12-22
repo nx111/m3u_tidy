@@ -118,7 +118,9 @@ def parsem3u(infile, need):
                 elif param_name == "group-title":
                     group = param_value
             if name == "":
-                name = re.sub('台$','', convert(title,"zh-cn"))
+                name = re.sub('台$|HD$|4K$','', convert(title,"zh-cn"))
+                if name[0:5] == 'CCTV-' or name[0:5] == 'CCTV_':
+                    name = name[0:4] + name[5:]
             song=track(length,group,name,logo,title,None,None,need)
         elif (len(line) != 0):
             # pull song path from all other, non-blank lines
@@ -135,17 +137,26 @@ def parsem3u(infile, need):
                     if item.fname == fname and item.fname != "" and item.name != "":
                         song.name = item.name
                         song.logo = item.logo
-                        song.title = re.sub('台$','', convert(song.title,"zh-cn"))
+                        song.title = re.sub('台$|HD$','', convert(song.title,"zh-cn"))
                         break
-            if song.name == "":     
+            if song.name == "":
                 for item in playlist:
-                    if re.sub('台$','', convert(song.title,"zh-cn")) == re.sub('台$','', convert(item.title,"zh-cn")):
+                    if re.sub('台$|HD$','', convert(song.title,"zh-cn")) == re.sub('台$|HD$','', convert(item.title,"zh-cn")):
                         song.name = item.name
                         song.logo = item.logo
                         song.title = re.sub('台$','', convert(song.title,"zh-cn"))
                         break
+
             if song.name == "":
-               song.name = convert(song.title,"zh-cn")
+               song.name = re.sub('台$|HD$', '', convert(song.title,"zh-cn"))
+               if song.name[0:5] == 'CCTV-' or song.name[0:5] == 'CCTV_':
+                   song.name = song.name[0:4] + song.name[5:]
+
+            if song.logo == "":
+               for item in playlist:
+                    if song.name == item.name and song.name != "":
+                        song.logo = item.logo
+                        break
 
             playlist.append(song)
 
