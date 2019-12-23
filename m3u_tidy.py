@@ -6,9 +6,10 @@ import sys,os
 import re
 from zhconv.zhconv import convert
 
-supports=['http','https','rtmp','rstp','ftp']
-playlist=[]
-lineEnds='\n'
+supports = ['http','https','rtmp','rstp','ftp']
+playlist = []
+lineEnds = '\n'
+force_get_name = False
 
 class track():
     def __init__(self, length, group, name, logo, title, path, fname, need):
@@ -117,10 +118,6 @@ def parsem3u(infile, need):
                     logo = re.sub(",", "%2C", param_value)
                 elif param_name == "group-title":
                     group = param_value
-            if name == "":
-                name = re.sub('台$|HD$|4K$','', convert(title,"zh-cn"))
-                if name[0:5] == 'CCTV-' or name[0:5] == 'CCTV_':
-                    name = name[0:4] + name[5:]
             song=track(length,group,name,logo,title,None,None,need)
         elif (len(line) != 0):
             # pull song path from all other, non-blank lines
@@ -139,15 +136,18 @@ def parsem3u(infile, need):
                         song.logo = item.logo
                         song.title = re.sub('台$|HD$','', convert(song.title,"zh-cn"))
                         break
-            if song.name == "":
+            if song.name == "" or force_get_name:
                 for item in playlist:
-                    if re.sub('台$|HD$','', convert(song.title,"zh-cn")) == re.sub('台$|HD$','', convert(item.title,"zh-cn")):
-                        song.name = item.name
+                    if re.sub('台$|HD$|频道$','', convert(song.title,"zh-cn")) == re.sub('台$|HD$|频道$','', convert(item.title,"zh-cn")) \
+                        or (item.name != "" and \
+                            re.sub('台$|HD$|频道$','', convert(song.title,"zh-cn")) == re.sub('台$|HD$|频道$','', convert(item.name,"zh-cn"))):
+                        if item.name != "":
+                            song.name = item.name
                         song.logo = item.logo
-                        song.title = re.sub('台$','', convert(song.title,"zh-cn"))
+                        song.title = re.sub('台$|臺$| $','', song.title)
                         break
 
-            if song.name == "":
+            if song.name == "" and need:
                song.name = re.sub('台$|HD$', '', convert(song.title,"zh-cn"))
                if song.name[0:5] == 'CCTV-' or song.name[0:5] == 'CCTV_':
                    song.name = song.name[0:4] + song.name[5:]
@@ -170,6 +170,7 @@ def parsem3u(infile, need):
 # for now, just pull the track info and print it onscreen
 # get the M3U file path from the first command line argument
 def main():
+    global force_get_name
     i = 0
     lastop = ''
     reference_m3u = ''
@@ -180,13 +181,16 @@ def main():
         if lastop == "-r":
             if os.path.exists(op) and os.path.isfile(op):
                 reference_m3u = op
-        elif op != "-r":
+        elif op == "-f":
+            force_get_name = True
+        elif op != "-r" and op != "-f":
             m3ufile = op
         lastop = op
         i = i + 1
 
     if i == 1:
-        print("Usage: python3 ",sys.argv[0],' [-r <reference m3u file>] input.m3u');
+        print("Usage: python3 ",sys.argv[0],' [ -f ] [-r <reference m3u file>] input.m3u');
+        print("       -f  force get tvg-name from reference m3u file.");
         exit()
 
     if not os.path.exists(m3ufile) or not os.path.isfile(m3ufile):
