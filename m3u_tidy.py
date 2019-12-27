@@ -136,13 +136,12 @@ def parsem3u(infile, need):
             if song.fname != "" and (song.name == "" or song.logo == ""):
                 for item in playlist:
                     if item.fname == fname and item.fname != "" and item.name != "":
-                        song.name = item.name
-                        song.logo = item.logo
+                        if item.name != "":
+                            song.name = item.name
+                        if item.logo != "":
+                            song.logo = item.logo
                         song.title = re.sub('台$|HD$','', convert(song.title,"zh-cn"))
                         break
-
-            if song.fixed_name:
-                    print("fixed_name=True....")
 
             if song.name == "" or (force_get_name and song.fixed_name != True):
                 for item in playlist:
@@ -151,7 +150,8 @@ def parsem3u(infile, need):
                             re.sub('台$|HD$|频道$','', convert(song.title,"zh-cn")) == re.sub('台$|HD$|频道$','', convert(item.name,"zh-cn"))):
                         if item.name != "":
                             song.name = item.name
-                        song.logo = item.logo
+                        if item.logo != "":
+                            song.logo = item.logo
                         song.title = re.sub('台$|臺$| $','', song.title)
                         break
 
