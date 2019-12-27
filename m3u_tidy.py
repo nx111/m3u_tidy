@@ -12,7 +12,7 @@ lineEnds = '\n'
 force_get_name = False
 
 class track():
-    def __init__(self, length, group, name, logo, title, path, fname, need):
+    def __init__(self, length, group, name, logo, title, path, fname, need, fixed_name):
         self.length = length
         self.group = group
         self.name = name
@@ -21,6 +21,7 @@ class track():
         self.path = path
         self.fname = fname
         self.need = need
+        self.fixed_name = fixed_name
 
 """
     song info lines are formatted like:
@@ -55,7 +56,7 @@ def parsem3u(infile, need):
     infile.close()
     infile = open(ifile, 'r')
     # initialize playlist variables before reading file
-    song=track(None,None,None,None,None,None,None,None)
+    song=track(None, None, None, None, None, None, None, None, None)
     for line in infile:
         line=line.strip()
         if line.startswith('#EXTINF:') or line.startswith('EXTINF:'):
@@ -69,6 +70,7 @@ def parsem3u(infile, need):
             isTitle = False
             item = ""
             lastchar = ""
+            fixed_name = ""
             param = []
             for c in line.split('#EXTINF:')[1]:
                  if c == "\"" or c == "\'":
@@ -118,12 +120,14 @@ def parsem3u(infile, need):
                     logo = re.sub(",", "%2C", param_value)
                 elif param_name == "group-title":
                     group = param_value
-            song=track(length,group,name,logo,title,None,None,need)
+                elif param_name == "fixed-name" and param_value.upper() == "TRUE":
+                    fixed_name = True                    
+            song=track(length, group, name, logo, title, None, None, need, fixed_name)
         elif (len(line) != 0):
             # pull song path from all other, non-blank lines
             protocol = line.strip().split('://')[0]
             if protocol not in supports:
-                 song=track(None,None,None,None,None,None,None,None)
+                 song=track(None, None, None, None, None, None, None, None, None)
                  continue
             song.path=re.sub(",.*","",line)
             fpath,fname=os.path.split(line)
@@ -136,7 +140,11 @@ def parsem3u(infile, need):
                         song.logo = item.logo
                         song.title = re.sub('台$|HD$','', convert(song.title,"zh-cn"))
                         break
-            if song.name == "" or force_get_name:
+
+            if song.fixed_name:
+                    print("fixed_name=True....")
+
+            if song.name == "" or (force_get_name and song.fixed_name != True):
                 for item in playlist:
                     if re.sub('台$|HD$|频道$','', convert(song.title,"zh-cn")) == re.sub('台$|HD$|频道$','', convert(item.title,"zh-cn")) \
                         or (item.name != "" and \
@@ -161,7 +169,7 @@ def parsem3u(infile, need):
             playlist.append(song)
 
             # reset the song variable so it doesn't use the same EXTINF more than once
-            song=track(None,None,None,None,None,None,None,None)
+            song=track(None, None, None, None, None, None, None, None, None)
 
     infile.close()
 
@@ -218,6 +226,8 @@ def main():
             info = info + F' tvg-name=\"{track.name}\"'
         if track.logo != '':
             info = info + F' tvg-logo=\"{track.logo}\"'
+        if track.fixed_name == True:
+            info = info + F' fixed-name=True'
         info = info + F', {track.title}'
         if lastgroup != "" and lastgroup != track.group:
             print("", end=lineEnds, file=out)
