@@ -57,6 +57,7 @@ def parsem3u(infile, need):
     # initialize playlist variables before reading file
     song=track(None, None, None, None, None, None, None, None, None)
     for line in infile:
+        skip_line = False
         line=line.strip()
         if line.startswith('#EXTINF:') or line.startswith('EXTINF:'):
             # pull length and title from #EXTINF line
@@ -122,7 +123,7 @@ def parsem3u(infile, need):
                 elif param_name == "fixed-name" and param_value.upper() == "TRUE":
                     fixed_name = True                    
             song=track(length, group, name, logo, title, None, None, need, fixed_name)
-        elif (len(line) != 0):
+        elif (len(line.strip()) != 0):
             # pull song path from all other, non-blank lines
             protocol = line.strip().split('://')[0]
             if protocol not in supports:
@@ -132,20 +133,8 @@ def parsem3u(infile, need):
             fpath,fname=os.path.split(line)
             if len(fname) >= 32:
                 song.fname = fname
-            if song.fname == None or song.fname == "":
-                for item in playlist:
-                    if (item.title != "" and \
-                            re.sub('台$|HD$|频道$','', convert(song.title,"zh-cn")) \
-                             == re.sub('台$|HD$|频道$','', convert(item.title,"zh-cn"))) \
-                        or (item.name != "" and \
-                            re.sub('台$|HD$|频道$','', convert(song.title,"zh-cn")) \
-                             == re.sub('台$|HD$|频道$','', convert(item.name,"zh-cn"))):
-                          if item.fname != None and item.fname != "":
-                              song.fname = item.fname
-
-            if song.fname == None or song.fname == "":
-                song=track(None, None, None, None, None, None, None, None, None)
-                continue
+            else:
+                song.fname = ""
 
             # skip duplicate list item
             for item in playlist:
@@ -155,9 +144,12 @@ def parsem3u(infile, need):
                    or (item.name != "" and \
                        re.sub('台$|HD$|频道$','', convert(song.title,"zh-cn")) \
                         == re.sub('台$|HD$|频道$','', convert(item.name,"zh-cn"))):
-                     if item.fname == song.fname and item.group == song.group and item.need == song.need:
+                     if item.path == song.path and item.group == song.group and item.need == song.need:
                          song=track(None, None, None, None, None, None, None, None, None)
-                         continue
+                         skip_line = True
+                         break
+            if skip_line:
+                continue
 
             if song.fname != "" and (song.name == "" or song.logo == ""):
                 for item in playlist:
@@ -195,6 +187,8 @@ def parsem3u(infile, need):
             playlist.append(song)
 
             # reset the song variable so it doesn't use the same EXTINF more than once
+            song=track(None, None, None, None, None, None, None, None, None)
+        else:
             song=track(None, None, None, None, None, None, None, None, None)
 
     infile.close()
