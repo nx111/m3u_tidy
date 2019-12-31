@@ -249,8 +249,8 @@ def parsetxt(infile, need):
             for item in urls:
                 j = 0
                 foundme = False
+                simple_item = re.sub('\$.*|\.flv$|\.m3u8$', '', item).strip()
                 while j < i:
-                    simple_item = re.sub('\$.*|\.flv$|\.m3u8$', '', item).strip()
                     if simple_item == re.sub('\$.*|\.flv$|\.m3u8$', '', urls[j]).strip():
                         foundme = True
                         if os.path.splitext(re.sub('\$.*', '', item))[1] == '.m3u8' \
