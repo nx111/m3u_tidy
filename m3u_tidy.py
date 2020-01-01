@@ -2,14 +2,17 @@
 # more info on the M3U file format available here:
 # http://n4k3d.com/the-m3u-file-format/
 
-import sys,os
+import sys, os, subprocess
 import re
+from math import floor
 from zhconv.zhconv import convert
 
-supports = ['http','https','rtmp','rstp','ftp']
+supports_m3u = ['http','https','rtmp','rstp','ftp']
+supports_chk = ['http','https','rtmp','rstp','ftp','sop','vjms','mitv','p2p','p3p','p4p','p5p','p6p','p7p','p8p','p9p']
 playlist = []
 lineEnds = '\n'
 force_get_name = False
+need_check_service_status = False
 
 class track():
     def __init__(self, length, group, name, logo, title, path, fname, need, fixed_name):
@@ -32,6 +35,38 @@ class track():
     ..\Minus The Bear - Planet of Ice\Minus The Bear_Planet of Ice_01_Burying Luck.mp3
 """
 
+def chk_service_status(url):
+    url_base_items = url.split("://")
+    protocol = url_base_items[0]
+    if protocol not in supports_chk:
+        return True
+
+    port = 0
+    server_and_port = url_base_items[1].split("/")[0].split(":")
+    server = server_and_port[0].split('$')[0]
+    if len(server.split('@')) > 1:
+        server = server.split('@')[1]
+
+    if len(server_and_port) == 1:
+        if protocol == 'http':
+            port = 80
+        elif protocol == 'https':
+            port = 443
+        elif protocol == 'rtmp':
+            port = 1935
+    else:
+        port = int(server_and_port[1])
+    if port > 0:
+        cmd = F'nmap -sT -n --max-rtt-timeout 1 --max-scan-delay 1ms --host-timeout 2 -Pn -p {port} {server}'
+    else:
+        cmd = F'nmap -sT -n --max-rtt-timeout 1 --max-scan-delay 1ms --host-timeout 2 -Pn {server}'
+    outputs = subprocess.Popen(cmd,stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True).communicate()
+    output = outputs[0].decode()
+    if output.find('(0 hosts up)') >= 0:
+        return False
+    else:
+        return True
+
 def parsem3u(infile, need):
     global lineEnds
     ifile = infile
@@ -53,12 +88,21 @@ def parsem3u(infile, need):
         lineEnds='\r\n'
 
     infile.close()
+    maxLines = int(os.popen(F'wc -l {ifile}').read().split()[0])
     infile = open(ifile, 'r')
     # initialize playlist variables before reading file
     song=track(None, None, None, None, None, None, None, None, None)
+    line_no = 0
+    last_percent = 0
     for line in infile:
         skip_line = False
         line=line.strip()
+        line_no += 1
+        percent = floor((line_no * 100) / maxLines)
+        if percent > last_percent:
+            print(F'      processed:  {percent}% ...', end='\r')
+            last_percent = percent
+
         if line.startswith('#EXTINF:') or line.startswith('EXTINF:'):
             # pull length and title from #EXTINF line
             paramstr = ""
@@ -126,11 +170,14 @@ def parsem3u(infile, need):
         elif (len(line.strip()) != 0):
             # pull song path from all other, non-blank lines
             protocol = line.strip().split('://')[0]
-            if protocol not in supports:
+            if protocol not in supports_m3u:
                  song=track(None, None, None, None, None, None, None, None, None)
                  continue
             song.path=re.sub(",.*","",line)
             fpath,fname=os.path.split(line)
+            if need_check_service_status and chk_service_status(fpath) == False:
+                song=track(None, None, None, None, None, None, None, None, None)
+                continue
             if len(fname) >= 32:
                 song.fname = fname
             else:
@@ -139,11 +186,11 @@ def parsem3u(infile, need):
             # skip duplicate list item
             for item in playlist:
                 if (item.title != "" and \
-                       re.sub('台$|HD$|频道$','', convert(song.title,"zh-cn")) \
-                       == re.sub('台$|HD$|频道$','', convert(item.title,"zh-cn"))) \
+                       re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(song.title,"zh-cn")) \
+                       == re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(item.title,"zh-cn"))) \
                    or (item.name != "" and \
-                       re.sub('台$|HD$|频道$','', convert(song.title,"zh-cn")) \
-                        == re.sub('台$|HD$|频道$','', convert(item.name,"zh-cn"))):
+                       re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(song.title,"zh-cn")) \
+                        == re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(item.name,"zh-cn"))):
                      if item.path == song.path and item.group == song.group and item.need == song.need:
                          song=track(None, None, None, None, None, None, None, None, None)
                          skip_line = True
@@ -163,18 +210,20 @@ def parsem3u(infile, need):
 
             if song.name == "" or (force_get_name and song.fixed_name != True):
                 for item in playlist:
-                    if re.sub('台$|HD$|频道$','', convert(song.title,"zh-cn")) == re.sub('台$|HD$|频道$','', convert(item.title,"zh-cn")) \
-                        or (item.name != "" and \
-                            re.sub('台$|HD$|频道$','', convert(song.title,"zh-cn")) == re.sub('台$|HD$|频道$','', convert(item.name,"zh-cn"))):
+                    if re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(song.title,"zh-cn")) \
+                       == re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(item.title,"zh-cn")) \
+                          or (item.name != "" and \
+                            re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(song.title,"zh-cn")) \
+                            == re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(item.name,"zh-cn"))):
                         if item.name != "":
                             song.name = item.name
                         if item.logo != "":
                             song.logo = item.logo
-                        song.title = re.sub('台$|臺$| $','', song.title)
+                        song.title = re.sub('台$|臺$','', song.title)
                         break
 
             if song.name == "" and need:
-               song.name = re.sub('台$|HD$', '', convert(song.title,"zh-cn"))
+               song.name = re.sub('(?P<xdian>[^电])台$|HD$','\g<xdian>', convert(song.title,"zh-cn"))
                if song.name[0:5] == 'CCTV-' or song.name[0:5] == 'CCTV_':
                    song.name = song.name[0:4] + song.name[5:]
 
@@ -219,11 +268,20 @@ def parsetxt(infile, need):
 
     infile.close()
 
+    maxLines = int(os.popen(F'wc -l {ifile}').read().split()[0])
     infile = open(ifile, 'r')
     # initialize playlist variables before reading file
     song=track(None, None, None, None, None, None, None, None, None)
     group = ""
+    line_no = 0
+    last_percent = 0
     for line in infile:
+        line_no += 1
+        percent = floor((line_no * 100) / maxLines)
+        if percent > last_percent:
+            print(F'      processed:  {percent}% ...', end='\r')
+            last_percent = percent
+
         line=line.strip()
         if line != "":
             # pull length and title from #EXTINF line
@@ -253,15 +311,16 @@ def parsetxt(infile, need):
                             if len(urls[j].split('\$')) > 1:
                                 label = '$' + urls[j].split('\$')[1]
                             urls[j] = os.path.splitext(re.sub('\$.*', '', urls[j]))[0] + '.m3u8' + label
-                            item = ''
                         break
                     j += 1
-                if foundme:
+                if foundme or (need_check_service_status and chk_service_status(item) == False):
+                    urls[i] = ''
                     i += 1
                     continue
                 i += 1
                 for list_item in playlist:
-                    if re.sub('台$| ', '', convert(title, "zh-cn")) == re.sub('台$| ', '', convert(list_item.title, "zh-cn")):
+                    if re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(title, "zh-cn")) \
+                       == re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(list_item.title, "zh-cn")):
                         foundit = False
                         url_items = list_item.path.split("#")
                         jj = 0
@@ -300,7 +359,7 @@ def parsetxt(infile, need):
                     if path != "":
                        path += '#'
                     path += item
-            title = re.sub('台$', '', convert(title, "zh-cn"))
+            title = re.sub('(?P<xdian>[^电])台$','\g<xdian>', convert(title, "zh-cn"))
             song=track(0, group, None, None, title, path, None, need, None)
 
             if not skipme:
@@ -316,7 +375,7 @@ def parsetxt(infile, need):
 # for now, just pull the track info and print it onscreen
 # get the M3U file path from the first command line argument
 def main():
-    global force_get_name
+    global force_get_name, need_check_service_status
     i = 0
     lastop = ''
     reference_file = ''
@@ -330,16 +389,19 @@ def main():
                 reference_file = os.path.realpath(op)
         elif op == "-f":
             force_get_name = True
+        elif op == "-c" or op == "--check":
+            need_check_service_status = True
         elif op != "-r" and op != "-f":
             input_file = os.path.realpath(op)
         lastop = op
         i = i + 1
 
     if i == 1:
-        print("Usage: python3 ",sys.argv[0],' [ -f ] [-r <reference file>] input_file');
-        print("       -f  force get tvg-name from reference file.");
+        print("Usage: python3 ",sys.argv[0],' [ -f ] [-c|--check] [-r <reference file>] input_file');
+        print("       -f          force get tvg-name from reference file.");
+        print("       -c|--check  drop offline channel source.");
         print("")
-        print("           reference file and input file can be m3u or txt file.");
+        print("       ps: reference file and input file can be m3u or txt file.");
         exit()
 
     if not os.path.exists(input_file) or not os.path.isfile(input_file):
@@ -367,7 +429,7 @@ def main():
         print("#EXTM3U", end=lineEnds, file=out)
         lastgroup = ""
         for track in playlist:
-            if track == None or track.need == False:
+            if track == None or track.need == False or track.path == None or track.path == "":
                 continue
             info=F'#EXTINF:{track.length}'
             if track.group != '':
@@ -387,7 +449,7 @@ def main():
     elif os.path.splitext(outfile)[1] == '.txt':
         lastgroup = ""
         for track in playlist:
-            if track == None or track.need == False:
+            if track == None or track.need == False or track.path == None or track.path == "":
                 continue
             if track.group != lastgroup:
                 if lastgroup != "":
