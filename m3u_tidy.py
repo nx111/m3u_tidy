@@ -6,16 +6,29 @@ import sys, os, subprocess
 import re
 from math import floor
 from zhconv.zhconv import convert
+from enum import Enum, unique
 
 supports_m3u = ['http','https','rtmp','rstp','ftp']
 supports_chk = ['http','https','rtmp','rstp','ftp','sop','vjms','mitv','p2p','p3p','p4p','p5p','p6p','p7p','p8p','p9p']
 playlist = []
+service_map = []
+groups = []
 lineEnds = '\n'
 force_get_name = False
 need_check_service_status = False
+map_file = ''
+
+@unique
+class Flags(Enum):
+    NEW     = 1
+    OUTPUT  = 2
+    UPDATED = 3
+    SKIP    = 4
+    MAP_GROUP = 10
+    MAP_CHANNEL = 11
 
 class track():
-    def __init__(self, length, group, id, name, logo, title, path, fname, need, fixed_name):
+    def __init__(self, length, group, id, name, logo, title, path, fname, flag, fixed_name):
         self.id = id
         self.length = length
         self.group = group
@@ -24,7 +37,7 @@ class track():
         self.title = title
         self.path = path
         self.fname = fname
-        self.need = need
+        self.flag = flag
         self.fixed_name = fixed_name
 
 """
@@ -35,6 +48,37 @@ class track():
     file name - relative or absolute path of file
     ..\Minus The Bear - Planet of Ice\Minus The Bear_Planet of Ice_01_Burying Luck.mp3
 """
+
+class service_map_item():
+    def __init__(self, flag, name, nickname):
+        self.flag = flag
+        self.name = name
+        self.nickname = nickname
+
+def resort_playlist():
+    i = 0
+    for item in playlist:
+        if item.flag == Flags.OUTPUT:
+            break
+        if item.flag == Flags.NEW and i < len(playlist):
+            if item.group not in groups:
+                item.flag = Flags.SKIP
+                continue
+            found_group = False
+            for mapitem in service_map:
+                if mapitem.nickname.strip() == item.group.strip() and mapitem.flag == Flags.MAP_GROUP:
+                    item.group = mapitem.name.strip()
+            for j in range(i + 1, len(playlist)):
+                if found_group:
+                    if item.group != playlist[j].group:
+                        item.flag = Flags.OUTPUT
+                        playlist.insert(j - 1, item)
+                        playlist.remove(playlist[i])
+                        break
+                elif item.group == playlist[j].group and item.flag == Flags.OUTPUT:
+                    found_group = True
+
+        i = i + 1
 
 def chk_service_status(url):
     url_base_items = url.split("://")
@@ -67,6 +111,42 @@ def chk_service_status(url):
         return False
     else:
         return True
+
+def parse_service_map(infile):
+    global service_map
+    try:
+        assert(type(infile) == '_io.TextIOWrapper')
+    except AssertionError:
+        infile = open(infile, "r")
+    for line in infile:
+        line = line.strip()
+        if line == '':
+            continue
+        flag = Flags.MAP_CHANNEL
+        if len(line.split(':')) > 1:
+             typename = line.split(':')[0].strip()
+             line = line.split(':')[1].strip()
+             if typename.upper() == 'GROUP':
+                flag = Flags.MAP_GROUP
+             elif typename.upper() == 'CHANNEL':
+                flag = Flags.MAP_CHANNEL
+             else:
+                continue
+        name,nick = line.split(',')
+        name = name.strip()
+        nick = nick.strip().split(' ')[0].split('#')[0].strip()
+        found = False
+        for item in service_map:
+            if item != None and item.name == name and item.nickname == nick \
+                   and item.name != '' and item.nick != '' and item.item != None and item.nickname != None \
+                   and item.flag != '' and item.flag == flag:
+                found = True
+                break
+        if not found:
+            map_item = service_map_item(flag, name, nick)
+            service_map.append(map_item)
+
+    infile.close()
 
 def parsem3u(infile, need):
     global lineEnds
@@ -172,8 +252,14 @@ def parsem3u(infile, need):
                 elif param_name == "group-title":
                     group = param_value
                 elif param_name == "fixed-name" and param_value.upper() == "TRUE":
-                    fixed_name = True                    
-            song=track(length, group, id, name, logo, title, None, None, need, fixed_name)
+                    fixed_name = True
+            if need:
+                song=track(length, group, id, name, logo, title, None, None, Flags.OUTPUT, fixed_name)
+                found_group = False
+                if group not in groups:
+                    groups.append(group)
+            else:
+                song=track(length, group, id, name, logo, title, None, None, Flags.NEW, fixed_name)
         elif (len(line.strip()) != 0):
             # pull song path from all other, non-blank lines
             protocol = line.strip().split('://')[0]
@@ -190,18 +276,30 @@ def parsem3u(infile, need):
             else:
                 song.fname = ""
 
+            for mapitem in service_map:
+                if mapitem.flag == Flags.MAP_CHANNEL and mapitem.nickname == song.title:
+                    song.title == mapitem.name
+                    break
+            for mapitem in service_map:
+                if mapitem.flag == Flags.MAP_GROUP and mapitem.nickname == song.group:
+                    song.group == mapitem.name
+                    break
+
             # skip duplicate list item
             for item in playlist:
                 if (item.title != "" and \
-                       re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(song.title,"zh-cn")) \
-                       == re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(item.title,"zh-cn"))) \
+                       re.sub('-| ', '', re.sub('(?P<xdian>[^电])台$|HD$|高清$|频道$','\g<xdian>', convert(song.title,"zh-cn"))) \
+                       == re.sub('-| ', '', re.sub('(?P<xdian>[^电])台$|HD$|高清$|频道$','\g<xdian>', convert(item.title,"zh-cn")))) \
                    or (item.name != "" and \
                        re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(song.title,"zh-cn")) \
                         == re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(item.name,"zh-cn"))):
-                     if item.path == song.path and item.group == song.group and item.need == song.need:
+                     if item.path == song.path and item.group == song.group and item.flag == song.flag:
                          song=track(None, None, None, None, None, None, None, None, None, None)
                          skip_line = True
                          break
+                     if item.flag == Flags.NEW:
+                         item.flag = Flags.UPDATED
+
             if skip_line:
                 continue
 
@@ -219,8 +317,8 @@ def parsem3u(infile, need):
 
             if song.name == "" or (force_get_name):
                 for item in playlist:
-                    if re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(song.title,"zh-cn")) \
-                       == re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(item.title,"zh-cn")) \
+                    if re.sub('-| ', '', re.sub('(?P<xdian>[^电])台$|HD$|高清$|频道$','\g<xdian>', convert(song.title,"zh-cn"))) \
+                       == re.sub('-| ', '', re.sub('(?P<xdian>[^电])台$|HD$|高清$|频道$','\g<xdian>', convert(item.title,"zh-cn"))) \
                           or (item.name != "" and \
                             re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(song.title,"zh-cn")) \
                             == re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(item.name,"zh-cn"))):
@@ -300,11 +398,22 @@ def parsetxt(infile, need):
             param = []
             if line.split(',')[1].strip() == '#genre#':
                 group = line.split(',')[0].strip()
+                for mapitem in service_map:
+                    if mapitem.flag == Flags.MAP_GROUP and mapitem.nickname == group:
+                        group == mapitem.name
+                        break
+                if need and (group not in groups):
+                    groups.append(group)
                 continue
 
             skipme = False
             title = line.split(',')[0].strip()
             path = line.split(',')[1].strip()
+
+            for mapitem in service_map:
+                if mapitem.flag == Flags.MAP_CHANNEL and mapitem.nickname == title:
+                    title == mapitem.name
+                    break
 
             urls = path.split('#')
             path = ''
@@ -324,14 +433,18 @@ def parsetxt(infile, need):
                             urls[j] = os.path.splitext(re.sub('\$.*', '', urls[j]))[0] + '.m3u8' + label
                         break
                     j += 1
+
                 if foundme or (need_check_service_status and chk_service_status(item) == False):
                     urls[i] = ''
                     i += 1
                     continue
+
                 i += 1
+
                 for list_item in playlist:
-                    if re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(title, "zh-cn")) \
-                       == re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(list_item.title, "zh-cn")):
+                    if re.sub('-| ', '', re.sub('(?P<xdian>[^电])台$|HD$|高清$|频道$','\g<xdian>', convert(title, "zh-cn"))) \
+                            == re.sub('-| ', '', re.sub('(?P<xdian>[^电])台$|HD$|高清$|频道$','\g<xdian>', \
+                                    convert(list_item.title, "zh-cn"))):
                         foundit = False
                         url_items = list_item.path.split("#")
                         jj = 0
@@ -355,7 +468,7 @@ def parsetxt(infile, need):
                             list_item.path += url_item
 
                         if foundit == False:
-                            if list_item.need:
+                            if list_item.flag:
                                 if list_item.group == group:
                                     skipme = True
                                     list_item.path += "#" + item.strip()
@@ -363,6 +476,8 @@ def parsetxt(infile, need):
                                     item = list_item.path + "#" + item.strip()
                             else:
                                 item = item.strip() + "#" + list_item.path
+                        if list_item.flag == Flags.NEW:
+                            list_item.flag = Flags.UPDATED
 
             path = ''
             for item in urls:
@@ -371,7 +486,10 @@ def parsetxt(infile, need):
                        path += '#'
                     path += item
             title = re.sub('(?P<xdian>[^电])台$','\g<xdian>', convert(title, "zh-cn"))
-            song=track(0, group, None, None, None, title, path, None, need, None)
+            if need:
+                song=track(0, group, None, None, None, title, path, None, Flags.OUTPUT, None)
+            else:
+                song=track(0, group, None, None, None, title, path, None, Flags.NEW, None)
 
             if not skipme:
                 playlist.append(song)
@@ -386,11 +504,12 @@ def parsetxt(infile, need):
 # for now, just pull the track info and print it onscreen
 # get the M3U file path from the first command line argument
 def main():
-    global force_get_name, need_check_service_status
+    global force_get_name, need_check_service_status, map_file
     i = 0
     lastop = ''
     reference_file = ''
     input_file = ''
+    map_file = ''
     for op in sys.argv:
         if i == 0:
             i = i + 1
@@ -398,6 +517,9 @@ def main():
         if lastop == "-r":
             if os.path.exists(op) and os.path.isfile(op):
                 reference_file = os.path.realpath(op)
+        elif lastop == "-m":
+            if os.path.exists(op) and os.path.isfile(op):
+                map_file = os.path.realpath(op)
         elif op == "-f":
             force_get_name = True
         elif op == "-c" or op == "--check":
@@ -408,7 +530,7 @@ def main():
         i = i + 1
 
     if i == 1:
-        print("Usage: python3 ",sys.argv[0],' [ -f ] [-c|--check] [-r <reference file>] input_file');
+        print("Usage: python3 ",sys.argv[0],' [ -f ] [-c|--check] [-m <group map file>] [-r <reference file>] input_file');
         print("       -f          force get tvg-name from reference file.");
         print("       -c|--check  drop offline channel source.");
         print("")
@@ -418,6 +540,9 @@ def main():
     if not os.path.exists(input_file) or not os.path.isfile(input_file):
         print("Error: source m3u file %s invalid." % input_file)
         exit()
+
+    if map_file != '':
+        parse_service_map(map_file)
 
     outfile=os.path.join(os.path.split(input_file)[0], os.path.split(input_file)[1].split(".")[0] + "-new" \
             + os.path.splitext(input_file)[1])
@@ -433,6 +558,9 @@ def main():
         playlist = parsem3u(input_file, True)
     elif os.path.splitext(input_file)[1] == '.txt':
         playlist = parsetxt(input_file, True)
+
+    resort_playlist()
+
     print(F'  Output new file:        {outfile} ...')
     out = open(outfile, "w+")
 
@@ -440,7 +568,7 @@ def main():
         print("#EXTM3U", end=lineEnds, file=out)
         lastgroup = ""
         for track in playlist:
-            if track == None or track.need == False or track.path == None or track.path == "":
+            if track == None or track.flag != Flags.OUTPUT or track.path == None or track.path == "":
                 continue
             info=F'#EXTINF:{track.length}'
             if track.group != '':
@@ -462,7 +590,7 @@ def main():
     elif os.path.splitext(outfile)[1] == '.txt':
         lastgroup = ""
         for track in playlist:
-            if track == None or track.need == False or track.path == None or track.path == "":
+            if track == None or track.flag != Flags.OUTPUT or track.path == None or track.path == "":
                 continue
             if track.group != lastgroup:
                 if lastgroup != "":
