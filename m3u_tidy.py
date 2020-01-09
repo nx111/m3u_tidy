@@ -276,9 +276,11 @@ def parsem3u(infile, need):
             else:
                 song.fname = ""
 
+            title_mapped = False
             for mapitem in service_map:
                 if mapitem.flag == Flags.MAP_CHANNEL and mapitem.nickname == song.title:
                     song.title == mapitem.name
+                    title_mapped = True
                     break
             for mapitem in service_map:
                 if mapitem.flag == Flags.MAP_GROUP and mapitem.nickname == song.group:
@@ -312,7 +314,8 @@ def parsem3u(infile, need):
                             song.logo = item.logo
                         if item.id != "":
                             song.id = item.id
-                        song.title = re.sub('台$|HD$','', convert(song.title,"zh-cn"))
+                        if not title_mapped:
+                            song.title = re.sub('台$|HD$','', convert(song.title,"zh-cn"))
                         break
 
             if song.name == "" or (force_get_name):
@@ -328,7 +331,8 @@ def parsem3u(infile, need):
                             song.logo = item.logo
                         if item.id != "":
                             song.id = item.id
-                        song.title = re.sub('台$|臺$','', song.title)
+                        if not title_mapped:
+                            song.title = re.sub('台$|臺$','', song.title)
                         break
 
             if song.name == "" and need:
@@ -410,9 +414,11 @@ def parsetxt(infile, need):
             title = line.split(',')[0].strip()
             path = line.split(',')[1].strip()
 
+            title_mapped = False
             for mapitem in service_map:
                 if mapitem.flag == Flags.MAP_CHANNEL and mapitem.nickname == title:
                     title == mapitem.name
+                    title_mapped = True
                     break
 
             urls = path.split('#')
@@ -485,7 +491,8 @@ def parsetxt(infile, need):
                     if path != "":
                        path += '#'
                     path += item
-            title = re.sub('(?P<xdian>[^电])台$','\g<xdian>', convert(title, "zh-cn"))
+            if not title_mapped:
+                title = re.sub('(?P<xdian>[^电])台$','\g<xdian>', convert(title, "zh-cn"))
             if need:
                 song=track(0, group, None, None, None, title, path, None, Flags.OUTPUT, None)
             else:
