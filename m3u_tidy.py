@@ -18,6 +18,7 @@ force_get_name = False
 need_check_service_status = False
 flag_sync_to_reference = False
 map_file = ''
+action_dsd = ''
 
 @unique
 class Flag(Enum):
@@ -59,6 +60,13 @@ class service_map_item():
         self.flag = flag
         self.name = name
         self.nickname = nickname
+
+def isdsd(url):
+    result = re.search(r'\/dsdtv\/', url) != None
+    if re.search(r'\/\/cloud-play\.hhalloy\.com\/live\/', url) != None:
+        uuid = os.path.splitext(os.path.split(url)[1])[0]
+        result = result or (re.match(r'\w{32,}$', uuid) != None)
+    return result
 
 def resort_playlist():
     i = 0
@@ -153,7 +161,7 @@ def parse_service_map(infile):
     infile.close()
 
 def parsem3u(infile, need):
-    global lineEnds, flag_sync_to_reference
+    global lineEnds, flag_sync_to_reference, action_dsd
     ifile = infile
     try:
         assert(type(infile) == '_io.TextIOWrapper')
@@ -296,11 +304,11 @@ def parsem3u(infile, need):
             found_path = False
             for item in playlist:
                 if (item.title != "" and \
-                       re.sub('-| ', '', re.sub('(?P<xdian>[^电])台$|HD$|高清$|频道$','\g<xdian>', convert(song.title,"zh-cn"))) \
-                       == re.sub('-| ', '', re.sub('(?P<xdian>[^电])台$|HD$|高清$|频道$','\g<xdian>', convert(item.title,"zh-cn")))) \
+                       re.sub('-| ', '', re.sub(r'(?P<xdian>[^电])台$|HD$|高清$|频道$','\g<xdian>', convert(song.title,"zh-cn"))) \
+                       == re.sub('-| ', '', re.sub(r'(?P<xdian>[^电])台$|HD$|高清$|频道$','\g<xdian>', convert(item.title,"zh-cn")))) \
                    or (item.name != "" and \
-                       re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(song.title,"zh-cn")) \
-                        == re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(item.name,"zh-cn"))):
+                       re.sub(r'(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(song.title,"zh-cn")) \
+                        == re.sub(r'(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(item.name,"zh-cn"))):
                      found_service = True
                      if item.path == song.path:
                          found_path = True
@@ -325,16 +333,16 @@ def parsem3u(infile, need):
                         if item.id != "":
                             song.id = item.id
                         if not title_mapped:
-                            song.title = re.sub('台$|HD$','', convert(song.title,"zh-cn"))
+                            song.title = re.sub('-| ', '', re.sub(r'(?P<xdian>[^电])台$|HD$|高清$|频道$|\s*\[dsd\]$','\g<xdian>', convert(song.title,"zh-cn"))) 
                         break
 
             if song.name == "" or (force_get_name):
                 for item in playlist:
-                    if re.sub('-| ', '', re.sub('(?P<xdian>[^电])台$|HD$|高清$|频道$','\g<xdian>', convert(song.title,"zh-cn"))) \
-                       == re.sub('-| ', '', re.sub('(?P<xdian>[^电])台$|HD$|高清$|频道$','\g<xdian>', convert(item.title,"zh-cn"))) \
+                    if re.sub('-| ', '', re.sub(r'(?P<xdian>[^电])台$|HD$|高清$|频道$|\s*\[dsd\]$','\g<xdian>', convert(song.title,"zh-cn"))) \
+                       == re.sub('-| ', '', re.sub(r'(?P<xdian>[^电])台$|HD$|高清$|频道$|\s*\[dsd\]$','\g<xdian>', convert(item.title,"zh-cn"))) \
                           or (item.name != "" and \
-                            re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(song.title,"zh-cn")) \
-                            == re.sub('(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(item.name,"zh-cn"))):
+                            re.sub(r'(?P<xdian>[^电])台$|HD$|频道$|\s*\[dsd\]$','\g<xdian>', convert(song.title,"zh-cn")) \
+                            == re.sub(r'(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(item.name,"zh-cn"))):
                         if item.name != "" and (song.name == "" or (song.name != "" and song.fixed_name != True)):
                             song.name = item.name
                         if item.logo != "":
@@ -342,21 +350,31 @@ def parsem3u(infile, need):
                         if item.id != "":
                             song.id = item.id
                         if not title_mapped:
-                            song.title = re.sub('台$|臺$','', song.title)
+                            song.title = re.sub(r'台$|臺$','', song.title)
                         break
 
             if song.name == "" and need:
-               song.name = re.sub('(?P<xdian>[^电])台$|HD$','\g<xdian>', convert(song.title,"zh-cn"))
+               song.name = re.sub(r'(?P<xdian>[^电])台$|HD$|\s*\[dsd\]$','\g<xdian>', convert(song.title,"zh-cn"))
                if song.name[0:5] == 'CCTV-' or song.name[0:5] == 'CCTV_':
                    song.name = song.name[0:4] + song.name[5:]
 
-            if song.logo == "":
+            if action_dsd == 'mark' and isdsd(song.path) and re.search('\[dsd\]$', song.title) == None:
+               if song.title[len(song.title) - 1].encode('UTF-8').isalpha():
+                  song.title += ' '
+               song.title += '[dsd]'
+            elif action_dsd == 'unmark':
+               song.title = re.sub(r'(?P<xdian>\s*\[dsd\]$','\g<xdian>', song.title)
+            elif action_dsd == 'remove' and isdsd(song.path):
+                song.path = ''
+
+            if song.logo == "" and song.path != '':
                for item in playlist:
                     if song.name == item.name and song.name != "":
                         song.logo = item.logo
                         break
 
-            playlist.append(song)
+            if song.path != '':
+                playlist.append(song)
 
             # reset the song variable so it doesn't use the same EXTINF more than once
             song=track(None, None, None, None, None, None, None, None, None, None)
@@ -368,7 +386,7 @@ def parsem3u(infile, need):
     return playlist
 
 def parsetxt(infile, need):
-    global lineEnds, flag_sync_to_reference
+    global lineEnds, flag_sync_to_reference, action_dsd
 
     ifile = infile
     try:
@@ -431,16 +449,16 @@ def parsetxt(infile, need):
             for item in urls:
                 j = 0
                 foundme = False
-                simple_item = re.sub('\$.*|\.flv$|\.m3u8$', '', item).strip()
+                simple_item = re.sub(r'\$.*|\.flv$|\.m3u8$', '', item).strip()
                 while j < i:
-                    if simple_item == re.sub('\$.*|\.flv$|\.m3u8$', '', urls[j]).strip():
+                    if simple_item == re.sub(r'\$.*|\.flv$|\.m3u8$', '', urls[j]).strip():
                         foundme = True
-                        if os.path.splitext(re.sub('\$.*', '', item))[1] == '.m3u8' \
-                               and  os.path.splitext(re.sub('\$.*', '', urls[j]))[1] == '.flv':
+                        if os.path.splitext(re.sub(r'\$.*', '', item))[1] == '.m3u8' \
+                               and  os.path.splitext(re.sub(r'\$.*', '', urls[j]))[1] == '.flv':
                             label = ''
                             if len(urls[j].split('\$')) > 1:
                                 label = '$' + urls[j].split('\$')[1]
-                            urls[j] = os.path.splitext(re.sub('\$.*', '', urls[j]))[0] + '.m3u8' + label
+                            urls[j] = os.path.splitext(re.sub(r'\$.*', '', urls[j]))[0] + '.m3u8' + label
                         break
                     j += 1
 
@@ -450,24 +468,24 @@ def parsetxt(infile, need):
                     continue
 
                 for list_item in playlist:
-                    if re.sub('-| ', '', re.sub('(?P<xdian>[^电])台$|HD$|高清$|频道$','\g<xdian>', convert(title, "zh-cn"))) \
-                            == re.sub('-| ', '', re.sub('(?P<xdian>[^电])台$|HD$|高清$|频道$','\g<xdian>', \
+                    if re.sub('-| ', '', re.sub(r'(?P<xdian>[^电])台$|HD$|高清$|频道$','\g<xdian>', convert(title, "zh-cn"))) \
+                            == re.sub('-| ', '', re.sub(r'(?P<xdian>[^电])台$|HD$|高清$|频道$','\g<xdian>', \
                                     convert(list_item.title, "zh-cn"))):
                         foundit = False
                         allow_write_back = (not flag_sync_to_reference) or (list_item.flag & int(Flag.REFERENCE)) == 0
                         url_items = list_item.path.split("#")
                         jj = 0
                         for url_item in url_items:
-                            simple_url_item = re.sub('\$.*|\.flv$|\.m3u8$', '', url_item).strip()
+                            simple_url_item = re.sub(r'\$.*|\.flv$|\.m3u8$', '', url_item).strip()
                             if simple_url_item == simple_item:
                                 foundit = True
                                 if allow_write_back and \
-                                       os.path.splitext(re.sub('\$.*', '', item))[1] == '.m3u8' \
-                                       and  os.path.splitext(re.sub('\$.*', '', url_items[jj]))[1] == '.flv':
+                                       os.path.splitext(re.sub(r'\$.*', '', item))[1] == '.m3u8' \
+                                       and  os.path.splitext(re.sub(r'\$.*', '', url_items[jj]))[1] == '.flv':
                                     label = ''
                                     if len(url_items[jj].split('\$')) > 1:
                                          label = '$' + url_items[jj].split('\$')[1]
-                                         url_items[jj] = os.path.splitext(re.sub('\$.*', '', url_items[jj]))[0] + '.m3u8' + label
+                                         url_items[jj] = os.path.splitext(re.sub(r'\$.*', '', url_items[jj]))[0] + '.m3u8' + label
                                 break
                             jj += 1
                         if not allow_write_back:
@@ -492,15 +510,32 @@ def parsetxt(infile, need):
                                     item = item.strip() + "#" + list_item.path
                         if list_item.flag == int(Flag.REFERENCE):
                             list_item.flag |= int(Flag.UPDATED)
-
                 i += 1
 
             path = ''
+            dsdurl = ''    #dsd url will be low priority
             for item in urls:
                 if item != '':
+                    if len(item.split('$')) == 1 and isdsd(item) and action_dsd == 'mark':
+                        item += '$电视多'
+                    elif len(item.split('$')) == 2 and item.split('$')[1] == '电视多' and action_dsd == 'unmark':
+                        item = re.sub(r'\$电视多','',item)
+                    elif action_dsd == 'remove' and isdsd(item):
+                        item = ''
+                        continue
+
+                    if isdsd(item):
+                        if dsdurl != '':
+                            dsdurl += '#'
+                        dsdurl += item
+                        continue
                     if path != "":
                        path += '#'
                     path += item
+            if dsdurl != '':
+               if path != '':
+                   path += '#'
+               path += dsdurl
             if not title_mapped:
                 title = re.sub('(?P<xdian>[^电])台$','\g<xdian>', convert(title, "zh-cn"))
             if path != '':
@@ -522,7 +557,7 @@ def parsetxt(infile, need):
 # for now, just pull the track info and print it onscreen
 # get the M3U file path from the first command line argument
 def main():
-    global force_get_name, need_check_service_status, map_file, flag_sync_to_reference
+    global force_get_name, need_check_service_status, map_file, flag_sync_to_reference, action_dsd
     i = 0
     lastop = ''
     reference_file = ''
@@ -544,6 +579,14 @@ def main():
             force_get_name = True
         elif op == "-c" or op == "--check":
             need_check_service_status = True
+        elif op == "--mark-dsd":
+            action_dsd = "mark"
+        elif op == "--unmark-dsd":
+            if action_dsd == '':
+                action_dsd = "unmark"
+        elif op == "--remove-dsd":
+            if action_dsd == '':
+                action_dsd = "remove"
         elif op != "-r" and op != "-f":
             input_file = os.path.realpath(op)
         lastop = op
@@ -554,6 +597,8 @@ def main():
         print("       -f          force get tvg-name from reference file.");
         print("       -r|-rs      reference from other file, and -rs mean sync to reference file.");
         print("       -c|--check  drop offline channel source.");
+        print("       --mark-dsd| --unmark-dsd")
+        print("                   mark channel that service from dian_shi_duo")
         print("")
         print("       ps: reference file and input file can be m3u or txt file.");
         print("       service map format: line format is \"<target title>,<source title>\".");
