@@ -68,6 +68,13 @@ def isdsd(url):
         result = result or (re.match(r'\w{32,}$', uuid) != None)
     return result
 
+def get_url_uuid(url):
+    uuid = os.path.splitext(os.path.split(url.split('$')[0])[1])[0]
+    if re.match(r'\w{32,}$', uuid) != None:
+        return uuid
+    else:
+        return ''
+
 def resort_playlist():
     i = 0
     for item in playlist:
@@ -279,14 +286,10 @@ def parsem3u(infile, need):
                  song=track(None, None, None, None, None, None, None, None, None, None)
                  continue
             song.path=re.sub(",.*","",line)
-            fpath,fname=os.path.split(line)
-            if need_check_service_status and chk_service_status(fpath) == False:
+            fname = get_url_uuid(song.path)
+            if need_check_service_status and chk_service_status(song.path) == False:
                 song=track(None, None, None, None, None, None, None, None, None, None)
                 continue
-            if len(fname) >= 32:
-                song.fname = fname
-            else:
-                song.fname = ""
 
             title_mapped = False
             for mapitem in service_map:
@@ -303,21 +306,20 @@ def parsem3u(infile, need):
             found_service = False
             found_path = False
             for item in playlist:
-                if (item.title != "" and \
-                       re.sub('-| ', '', re.sub(r'(?P<xdian>[^电])台$|HD$|高清$|频道$','\g<xdian>', convert(song.title,"zh-cn"))) \
-                       == re.sub('-| ', '', re.sub(r'(?P<xdian>[^电])台$|HD$|高清$|频道$','\g<xdian>', convert(item.title,"zh-cn")))) \
-                   or (item.name != "" and \
-                       re.sub(r'(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(song.title,"zh-cn")) \
-                        == re.sub(r'(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(item.name,"zh-cn"))):
-                     found_service = True
-                     if item.path == song.path:
-                         found_path = True
-                         if item.group == song.group and item.flag == song.flag:
-                             song=track(None, None, None, None, None, None, None, None, None, None)
-                             skip_line = True
-                             continue
-                     if item.flag == Flag.REFERENCE:
-                         item.flag |= Flag.UPDATED
+                #print(F'line {line_no}: title:{song.title} {line}')
+                if (song.path != '' and song.path == item.path) \
+                        or re.sub('-| ', '', re.sub(r'(?P<xdian>[^电])台$|HD$|高清$|频道$|\s*\[dsd\]$','\g<xdian>', convert(song.title, "zh-cn"))) \
+                            == re.sub('-| ', '', re.sub(r'(?P<xdian>[^电])台$|HD$|高清$|频道$|\s*\[dsd\]$','\g<xdian>', convert(item.title, "zh-cn"))) \
+                        or re.sub(r'(?P<xdian>[^电])台$|HD$|频道$|\s*\[dsd\]$','\g<xdian>', convert(song.title, "zh-cn")) \
+                            == re.sub(r'(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(item.name, "zh-cn")):
+                    found_service = True
+                    if item.path == song.path:
+                        found_path = True
+                        if item.group == song.group and item.flag == song.flag:
+                            skip_line = True
+                            continue
+                    if item.flag == Flag.REFERENCE:
+                        item.flag |= Flag.UPDATED
 
             if skip_line or ((song.flag & int(Flag.REFERENCE)) == 0 and flag_sync_to_reference and found_service == True and found_path == False):
                 song=track(None, None, None, None, None, None, None, None, None, None)
@@ -333,7 +335,7 @@ def parsem3u(infile, need):
                         if item.id != "":
                             song.id = item.id
                         if not title_mapped:
-                            song.title = re.sub('-| ', '', re.sub(r'(?P<xdian>[^电])台$|HD$|高清$|频道$|\s*\[dsd\]$','\g<xdian>', convert(song.title,"zh-cn"))) 
+                            song.title = re.sub('-| ', '', re.sub(r'(?P<xdian>[^电])台$|HD$|高清$','\g<xdian>', convert(song.title,"zh-cn"))) 
                         break
 
             if song.name == "" or (force_get_name):
@@ -449,12 +451,15 @@ def parsetxt(infile, need):
             for item in urls:
                 j = 0
                 foundme = False
-                simple_item = re.sub(r'\$.*|\.flv$|\.m3u8$', '', item).strip()
+                simple_item = re.sub(r'\$*', '', item).strip()
+                uuid_item = get_url_uuid(item)
                 while j < i:
-                    if simple_item == re.sub(r'\$.*|\.flv$|\.m3u8$', '', urls[j]).strip():
+                    simple_item_j = re.sub(r'\$*','',urls[j]).strip()
+                    if simple_item == simple_item_j or (uuid_item != '' and uuid_item == get_url_uuid(urls[j])):
                         foundme = True
-                        if os.path.splitext(re.sub(r'\$.*', '', item))[1] == '.m3u8' \
-                               and  os.path.splitext(re.sub(r'\$.*', '', urls[j]))[1] == '.flv':
+                        if re.sub(r'\.m3u8|\.flv', '', simple_item) == re.sub(r'\.m3u8|\.flv', '', simple_item_j) \
+                               and os.path.splitext(re.sub(r'\$.*', '', simple_item))[1] == '.m3u8' \
+                               and  os.path.splitext(re.sub(r'\$.*', '', simple_item_j))[1] == '.flv':
                             label = ''
                             if len(urls[j].split('\$')) > 1:
                                 label = '$' + urls[j].split('\$')[1]
@@ -468,20 +473,21 @@ def parsetxt(infile, need):
                     continue
 
                 for list_item in playlist:
-                    if re.sub('-| ', '', re.sub(r'(?P<xdian>[^电])台$|HD$|高清$|频道$','\g<xdian>', convert(title, "zh-cn"))) \
-                            == re.sub('-| ', '', re.sub(r'(?P<xdian>[^电])台$|HD$|高清$|频道$','\g<xdian>', \
+                    if re.sub('-| ', '', re.sub(r'(?P<xdian>[^电])台$|HD$|高清$|频道$|\s*\[dsd\]$','\g<xdian>', convert(title, "zh-cn"))) \
+                            == re.sub('-| ', '', re.sub(r'(?P<xdian>[^电])台$|HD$|高清$|频道$|\s*\[dsd\]$','\g<xdian>', \
                                     convert(list_item.title, "zh-cn"))):
                         foundit = False
                         allow_write_back = (not flag_sync_to_reference) or (list_item.flag & int(Flag.REFERENCE)) == 0
                         url_items = list_item.path.split("#")
                         jj = 0
                         for url_item in url_items:
-                            simple_url_item = re.sub(r'\$.*|\.flv$|\.m3u8$', '', url_item).strip()
-                            if simple_url_item == simple_item:
+                            simple_url_item = re.sub(r'\$*','',url_item).strip()
+                            if simple_url_item == simple_item or (uuid_item != '' and uuid_item == get_url_uuid(url_item)):
                                 foundit = True
-                                if allow_write_back and \
-                                       os.path.splitext(re.sub(r'\$.*', '', item))[1] == '.m3u8' \
-                                       and  os.path.splitext(re.sub(r'\$.*', '', url_items[jj]))[1] == '.flv':
+                                if allow_write_back \
+                                       and re.sub(r'\.m3u8|\.flv', '', simple_item) == re.sub(r'\.m3u8|\.flv', '', simple_url_item) \
+                                       and os.path.splitext(re.sub(r'\$.*', '', simple_item))[1] == '.m3u8' \
+                                       and os.path.splitext(re.sub(r'\$.*', '', simple_url_item))[1] == '.flv':
                                     label = ''
                                     if len(url_items[jj].split('\$')) > 1:
                                          label = '$' + url_items[jj].split('\$')[1]
@@ -490,7 +496,6 @@ def parsetxt(infile, need):
                             jj += 1
                         if not allow_write_back:
                             if not foundit:
-                                #print(F'---- {title}  urls[{i}]({urls[i]}) will be removed')
                                 urls[i] = ''
                         else:
                             list_item.path = ''
@@ -537,7 +542,7 @@ def parsetxt(infile, need):
                    path += '#'
                path += dsdurl
             if not title_mapped:
-                title = re.sub('(?P<xdian>[^电])台$','\g<xdian>', convert(title, "zh-cn"))
+                title = re.sub('(?P<xdian>[^电])台$|HD$|高清$','\g<xdian>', convert(title, "zh-cn"))
             if path != '':
                 if need:
                     song=track(0, group, None, None, None, title, path, None, int(Flag.OUTPUT), None)
