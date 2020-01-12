@@ -2,7 +2,7 @@
 # more info on the M3U file format available here:
 # http://n4k3d.com/the-m3u-file-format/
 
-import sys, os, subprocess
+import sys, os, subprocess, signal
 import re
 import requests
 from math import floor
@@ -33,7 +33,6 @@ class Flag(Enum):
     def __int__(self):
         return self.value
 
-
 class track():
     def __init__(self, length, group, id, name, logo, title, path, fname, flag, fixed_name):
         self.id = id
@@ -61,6 +60,10 @@ class service_map_item():
         self.flag = flag
         self.name = name
         self.nickname = nickname
+
+def shutdown_me(signum, frame):
+    print('')
+    exit()
 
 def isdsd(url):
     result = re.search(r'\/dsdtv\/', url) != None
@@ -373,7 +376,7 @@ def parsem3u(infile, need):
                   song.title += ' '
                song.title += '[dsd]'
             elif action_dsd == 'unmark':
-               song.title = re.sub(r'(?P<xdian>\s*\[dsd\]$','\g<xdian>', song.title)
+               song.title = re.sub(r'(?P<xdian>)\s*\[dsd\]$','\g<xdian>', song.title)
             elif action_dsd == 'remove' and isdsd(song.path):
                 song.path = ''
 
@@ -572,6 +575,10 @@ def main():
     reference_file = ''
     input_file = ''
     map_file = ''
+
+    signal.signal(signal.SIGINT, shutdown_me)
+    signal.signal(signal.SIGTERM, shutdown_me)
+
     for op in sys.argv:
         if i == 0:
             i = i + 1
