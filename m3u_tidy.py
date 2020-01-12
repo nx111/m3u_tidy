@@ -4,6 +4,7 @@
 
 import sys, os, subprocess
 import re
+import requests
 from math import floor
 from zhconv.zhconv import convert
 from enum import Enum, unique
@@ -89,7 +90,8 @@ def resort_playlist():
                     item.group = mapitem.name.strip()
             for j in range(i + 1, len(playlist)):
                 if found_group:
-                    if item.group != playlist[j].group:
+                    if item.group != playlist[j].group and \
+                           ((need_check_service_status  and chk_service_status(item.path) or not need_check_service_status)):
                         item.flag |= int(Flag.OUTPUT)
                         playlist.insert(j - 1, item)
                         playlist.remove(playlist[i])
@@ -105,6 +107,19 @@ def chk_service_status(url):
     if protocol not in supports_chk:
         return True
 
+    if protocol == 'http' or protocol == 'https':
+        userAgent = {"user-agent": "Mozilla/5.0 (X11; Linux x86_64; rv:72.0) Gecko/20100101 Firefox/72.0"}
+        timeOut = 20
+        try:
+            request = requests.get(url, headers = userAgent, timeout = timeOut)
+            httpStatusCode = request.status_code
+            if request.status_code >= 200 and request.status_code < 400:
+                return True
+            else:
+                return False
+        except:
+            return False
+
     port = 0
     server_and_port = url_base_items[1].split("/")[0].split(":")
     server = server_and_port[0].split('$')[0]
@@ -112,11 +127,7 @@ def chk_service_status(url):
         server = server.split('@')[1]
 
     if len(server_and_port) == 1:
-        if protocol == 'http':
-            port = 80
-        elif protocol == 'https':
-            port = 443
-        elif protocol == 'rtmp':
+        if protocol == 'rtmp':
             port = 1935
     else:
         port = int(server_and_port[1])
@@ -193,15 +204,11 @@ def parsem3u(infile, need):
     # initialize playlist variables before reading file
     song=track(None, None, None, None, None, None, None, None, None, None)
     line_no = 0
-    last_percent = 0
     for line in infile:
         skip_line = False
         line=line.strip()
         line_no += 1
         percent = floor((line_no * 100) / maxLines)
-        if percent > last_percent:
-            print(F'      processed:  {percent}% ...', end='\r')
-            last_percent = percent
 
         if line.startswith('#EXTINF:') or line.startswith('EXTINF:'):
             # pull length and title from #EXTINF line
@@ -246,6 +253,7 @@ def parsem3u(infile, need):
                  lastchar = c         
 
             title = title.strip()
+            print("      processed: %2d%%  processing: %-30s" % (percent,title), end='\r')
             name = ""
             group = ""
             logo = ""
@@ -287,7 +295,7 @@ def parsem3u(infile, need):
                  continue
             song.path=re.sub(",.*","",line)
             fname = get_url_uuid(song.path)
-            if need_check_service_status and chk_service_status(song.path) == False:
+            if need_check_service_status and need and chk_service_status(song.path) == False:
                 song=track(None, None, None, None, None, None, None, None, None, None)
                 continue
 
@@ -411,13 +419,9 @@ def parsetxt(infile, need):
     song=track(None, None, None, None, None, None, None, None, None, None)
     group = ""
     line_no = 0
-    last_percent = 0
     for line in infile:
         line_no += 1
         percent = floor((line_no * 100) / maxLines)
-        if percent > last_percent:
-            print(F'      processed:  {percent}% ...', end='\r')
-            last_percent = percent
 
         line=line.strip()
         if line != "":
@@ -437,7 +441,7 @@ def parsetxt(infile, need):
             skipme = False
             title = line.split(',')[0].strip()
             path = line.split(',')[1].strip()
-
+            print("      processed: %2d%%  processing: %-30s" % (percent,title), end='\r')
             title_mapped = False
             for mapitem in service_map:
                 if mapitem.flag == Flag.MAP_CHANNEL and mapitem.nickname == title:
@@ -467,7 +471,7 @@ def parsetxt(infile, need):
                         break
                     j += 1
 
-                if foundme or (need_check_service_status and chk_service_status(item) == False):
+                if foundme or (need_check_service_status and need and chk_service_status(item) == False):
                     urls[i] = ''
                     i += 1
                     continue
