@@ -273,7 +273,7 @@ def parsem3u(infile, need):
             process_msg = F'      processed: {percent:2}%  processing: '
             if output_line_maxlen < (len(process_msg) + len(title)):
                output_line_maxlen = len(process_msg) + len(title)
-            print(process_msg + '{title:{output_line_maxlen - len(process_msg)}}', end='\r')
+            print(process_msg + F'{title:{output_line_maxlen - len(process_msg)}}', end='\r')
             name = ""
             group = ""
             logo = ""
@@ -466,7 +466,7 @@ def parsetxt(infile, need):
             process_msg = F'      processed: {percent:2}%  processing: '
             if output_line_maxlen < (len(process_msg) + len(title)):
                output_line_maxlen = len(process_msg) + len(title)
-            print(process_msg + '{title:{output_line_maxlen - len(process_msg)}}', end='\r')
+            print(process_msg + F'{title:{output_line_maxlen - len(process_msg)}}', end='\r')
 
             title_mapped = False
             for mapitem in service_map:
