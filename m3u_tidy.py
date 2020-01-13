@@ -4,7 +4,7 @@
 
 import sys, os, subprocess, signal
 import re
-import requests
+import requests, urllib3
 from math import floor
 from zhconv.zhconv import convert
 from enum import Enum, unique
@@ -93,12 +93,14 @@ def resort_playlist():
                     item.group = mapitem.name.strip()
             for j in range(i + 1, len(playlist)):
                 if found_group:
-                    if item.group != playlist[j].group and \
-                           ((need_check_service_status  and chk_service_status(item.path) or not need_check_service_status)):
-                        item.flag |= int(Flag.OUTPUT)
-                        playlist.insert(j - 1, item)
-                        playlist.remove(playlist[i])
-                        break
+                    if item.group != playlist[j].group:
+                        if need_check_service_status:
+                            print(F'      Checking to add: {item.title} ...{" ":40}')
+                        if ((need_check_service_status  and chk_service_status(item.path) or not need_check_service_status)):
+                            item.flag |= int(Flag.OUTPUT)
+                            playlist.insert(j - 1, item)
+                            playlist.remove(playlist[i])
+                            break
                 elif item.group == playlist[j].group and item.flag == int(Flag.OUTPUT):
                     found_group = True
 
@@ -112,17 +114,28 @@ def chk_service_status(url):
 
     if protocol == 'http' or protocol == 'https':
         userAgent = {"user-agent": "Mozilla/5.0 (X11; Linux x86_64; rv:72.0) Gecko/20100101 Firefox/72.0"}
-        timeOut = 20
+        session = requests.Session()
         try:
-            request = requests.get(url, headers = userAgent, timeout = timeOut)
+            session.trust_env = False
+            request = session.get(url, headers = userAgent, timeout = 10)
             httpStatusCode = request.status_code
-            if request.status_code >= 200 and request.status_code < 400:
+            if request.status_code == 200:
                 return True
             else:
                 return False
-        except:
-            return False
+        except  (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError,urllib3.exceptions.MaxRetryError):
+            if os.environ[protocol+'_proxy'] != '':
+                try:
+                    session.trust_env = True
+                    request = session.get(url, headers = userAgent, timeout = 20)
+                    httpStatusCode = request.status_code
+                    if request.status_code == 200:
+                        return True
+                except:
+                    pass
+        return False
 
+    # for other protocols
     port = 0
     server_and_port = url_base_items[1].split("/")[0].split(":")
     server = server_and_port[0].split('$')[0]
@@ -207,6 +220,7 @@ def parsem3u(infile, need):
     # initialize playlist variables before reading file
     song=track(None, None, None, None, None, None, None, None, None, None)
     line_no = 0
+    output_line_maxlen = 0
     for line in infile:
         skip_line = False
         line=line.strip()
@@ -256,7 +270,10 @@ def parsem3u(infile, need):
                  lastchar = c         
 
             title = title.strip()
-            print("      processed: %2d%%  processing: %-30s" % (percent,title), end='\r')
+            process_msg = F'      processed: {percent:2}%  processing: '
+            if output_line_maxlen < (len(process_msg) + len(title)):
+               output_line_maxlen = len(process_msg) + len(title)
+            print(process_msg + '{title:{output_line_maxlen - len(process_msg)}}', end='\r')
             name = ""
             group = ""
             logo = ""
@@ -422,6 +439,7 @@ def parsetxt(infile, need):
     song=track(None, None, None, None, None, None, None, None, None, None)
     group = ""
     line_no = 0
+    output_line_maxlen = 0
     for line in infile:
         line_no += 1
         percent = floor((line_no * 100) / maxLines)
@@ -444,7 +462,12 @@ def parsetxt(infile, need):
             skipme = False
             title = line.split(',')[0].strip()
             path = line.split(',')[1].strip()
-            print("      processed: %2d%%  processing: %-30s" % (percent,title), end='\r')
+
+            process_msg = F'      processed: {percent:2}%  processing: '
+            if output_line_maxlen < (len(process_msg) + len(title)):
+               output_line_maxlen = len(process_msg) + len(title)
+            print(process_msg + '{title:{output_line_maxlen - len(process_msg)}}', end='\r')
+
             title_mapped = False
             for mapitem in service_map:
                 if mapitem.flag == Flag.MAP_CHANNEL and mapitem.nickname == title:
