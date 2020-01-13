@@ -123,7 +123,7 @@ def chk_service_status(url):
                 return True
             else:
                 return False
-        except  (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError,urllib3.exceptions.MaxRetryError):
+        except  (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError,urllib3.exceptions.MaxRetryError, urllib3.exceptions.ReadTimeoutError):
             if os.environ[protocol+'_proxy'] != '':
                 try:
                     session.trust_env = True
@@ -133,6 +133,8 @@ def chk_service_status(url):
                         return True
                 except:
                     pass
+        except:
+            pass
         return False
 
     # for other protocols
