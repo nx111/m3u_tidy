@@ -124,7 +124,7 @@ def chk_service_status(url):
             else:
                 return False
         except  (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError,urllib3.exceptions.MaxRetryError, urllib3.exceptions.ReadTimeoutError):
-            if os.environ[protocol+'_proxy'] != '':
+            if os.environ.get(protocol+'_proxy') is not None and os.environ[protocol+'_proxy'] != "":
                 try:
                     session.trust_env = True
                     request = session.get(url, headers = userAgent, timeout = 20)
