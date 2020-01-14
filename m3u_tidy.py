@@ -4,7 +4,7 @@
 
 import sys, os, subprocess, signal
 import re
-import requests, urllib3
+import requests, urllib3, datetime
 from math import floor
 from zhconv.zhconv import convert
 from enum import Enum, unique
@@ -20,6 +20,7 @@ need_check_service_status = False
 flag_sync_to_reference = False
 map_file = ''
 action_dsd = ''
+debug = False
 
 @unique
 class Flag(Enum):
@@ -107,40 +108,47 @@ def resort_playlist():
         i = i + 1
 
 def chk_service_status(url):
+    global debug
     url_base_items = url.split("://")
     protocol = url_base_items[0]
     if protocol not in supports_chk:
         return True
 
+    if debug:
+        print(F'          {url} ', flush=True, end='')
     if protocol == 'http' or protocol == 'https':
         userAgent = {"user-agent": "Mozilla/5.0 (X11; Linux x86_64; rv:72.0) Gecko/20100101 Firefox/72.0"}
+        session = requests.Session()
         try:
-            session = requests.Session()
             session.trust_env = False
-            request = session.get(url, headers = userAgent, timeout = 10)
+            start = datetime.datetime.now()
+            request = session.get(url, headers = userAgent, timeout = (10,5))
+            end = datetime.datetime.now()
             httpStatusCode = request.status_code
             if request.status_code == 200:
-                session.close()
+                if debug:
+                    print(F'OK ({(end-start).seconds})')
                 return True
         except  (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError,urllib3.exceptions.MaxRetryError, urllib3.exceptions.ReadTimeoutError):
-            if session != None:
-               session.close()
             if os.environ.get(protocol+'_proxy') is not None and os.environ[protocol+'_proxy'] != "":
                 try:
+                    session = requests.Session()
                     session.trust_env = True
-                    request = session.get(url, headers = userAgent, timeout = 20)
+                    start2 = datetime.datetime.now()
+                    request = session.get(url, headers = userAgent, timeout = (15,5))
+                    end = datetime.datetime.now()
                     httpStatusCode = request.status_code
                     if request.status_code == 200:
-                        session.close()
+                        if debug:
+                            print(F'[P]OK ({(end-start2).seconds})')
                         return True
                 except:
-                    pass
+                    end = datetime.datetime.now()
         except:
-            pass
+            end = datetime.datetime.now()
 
-        if session != None:
-            session.close()
-
+        if debug:
+            print(F'OFFLINE ({(end-start).seconds})')
         return False
 
     # for other protocols
@@ -159,11 +167,17 @@ def chk_service_status(url):
         cmd = F'nmap -sT -n --max-rtt-timeout 1 --max-scan-delay 1ms --host-timeout 2 -Pn -p {port} {server}'
     else:
         cmd = F'nmap -sT -n --max-rtt-timeout 1 --max-scan-delay 1ms --host-timeout 2 -Pn {server}'
+    start = datetime.datetime.now()
     outputs = subprocess.Popen(cmd,stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True).communicate()
+    end = datetime.datetime.now()
     output = outputs[0].decode()
     if output.find('(0 hosts up)') >= 0:
+        if debug:
+            print(F'OFFLINE ({(end-start).seconds})')
         return False
     else:
+        if debug:
+            print(F'OK ({(end-start).seconds})')
         return True
 
 def parse_service_map(infile):
@@ -203,7 +217,7 @@ def parse_service_map(infile):
     infile.close()
 
 def parsem3u(infile, need):
-    global lineEnds, flag_sync_to_reference, action_dsd
+    global lineEnds, flag_sync_to_reference, action_dsd, debug
     ifile = infile
     try:
         assert(type(infile) == '_io.TextIOWrapper')
@@ -281,7 +295,10 @@ def parsem3u(infile, need):
             process_msg = F'      processed: {percent:2}%  processing: '
             if output_line_maxlen < (len(process_msg) + len(title)):
                output_line_maxlen = len(process_msg) + len(title)
-            print(process_msg + F'{title:{output_line_maxlen - len(process_msg)}}', end='\r')
+            if debug and need:
+                print(process_msg + F'{title:{output_line_maxlen - len(process_msg)}}')
+            else:
+                print(process_msg + F'{title:{output_line_maxlen - len(process_msg)}}', end='\r')
             name = ""
             group = ""
             logo = ""
@@ -424,7 +441,7 @@ def parsem3u(infile, need):
     return playlist
 
 def parsetxt(infile, need):
-    global lineEnds, flag_sync_to_reference, action_dsd
+    global lineEnds, flag_sync_to_reference, action_dsd, debug
 
     ifile = infile
     try:
@@ -474,7 +491,10 @@ def parsetxt(infile, need):
             process_msg = F'      processed: {percent:2}%  processing: '
             if output_line_maxlen < (len(process_msg) + len(title)):
                output_line_maxlen = len(process_msg) + len(title)
-            print(process_msg + F'{title:{output_line_maxlen - len(process_msg)}}', end='\r')
+            if debug and need:
+                print(process_msg + F'{title:{output_line_maxlen - len(process_msg)}}')
+            else:
+                print(process_msg + F'{title:{output_line_maxlen - len(process_msg)}}', end='\r')
 
             title_mapped = False
             for mapitem in service_map:
@@ -601,6 +621,8 @@ def parsetxt(infile, need):
 # get the M3U file path from the first command line argument
 def main():
     global force_get_name, need_check_service_status, map_file, flag_sync_to_reference, action_dsd
+    global debug
+
     i = 0
     lastop = ''
     reference_file = ''
@@ -634,13 +656,15 @@ def main():
         elif op == "--remove-dsd":
             if action_dsd == '':
                 action_dsd = "remove"
+        elif op == "--debug":
+            debug = True
         elif op != "-r" and op != "-f":
             input_file = os.path.realpath(op)
         lastop = op
         i = i + 1
 
     if i == 1:
-        print("Usage: python3 ",sys.argv[0],' [ -f ] [-c|--check] [-m <service map file>] [-r[s] <reference file>] input_file');
+        print("Usage: python3 ",sys.argv[0],' [ -f ] [-c|--check] [--debug] [-m <service map file>] [-r[s] <reference file>] input_file');
         print("       -f          force get tvg-name from reference file.");
         print("       -r|-rs      reference from other file, and -rs mean sync to reference file.");
         print("       -c|--check  drop offline channel source.");
