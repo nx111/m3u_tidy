@@ -114,41 +114,47 @@ def chk_service_status(url):
 
     if protocol == 'http' or protocol == 'https':
         userAgent = {"user-agent": "Mozilla/5.0 (X11; Linux x86_64; rv:72.0) Gecko/20100101 Firefox/72.0"}
-        session = requests.Session()
         try:
+            session = requests.Session()
             session.trust_env = False
             request = session.get(url, headers = userAgent, timeout = 10)
             httpStatusCode = request.status_code
             if request.status_code == 200:
+                session.close()
                 return True
-            else:
-                return False
         except  (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError,urllib3.exceptions.MaxRetryError, urllib3.exceptions.ReadTimeoutError):
+            if session != None:
+               session.close()
             if os.environ.get(protocol+'_proxy') is not None and os.environ[protocol+'_proxy'] != "":
                 try:
                     session.trust_env = True
                     request = session.get(url, headers = userAgent, timeout = 20)
                     httpStatusCode = request.status_code
                     if request.status_code == 200:
+                        session.close()
                         return True
                 except:
                     pass
         except:
             pass
+
+        if session != None:
+            session.close()
+
         return False
 
     # for other protocols
     port = 0
-    server_and_port = url_base_items[1].split("/")[0].split(":")
-    server = server_and_port[0].split('$')[0]
-    if len(server.split('@')) > 1:
-        server = server.split('@')[1]
-
-    if len(server_and_port) == 1:
+    server_and_port = url_base_items[1].split("/")[0]
+    if re.search('@',server_and_port) != None:
+        server_and_port = server_and_port.split('@')[1]
+    server = server_and_port.split(':')[0]
+    if len(server_and_port.split(':')) > 1:
+        port = int(server_and_port.split(':')[1])
+    else :
         if protocol == 'rtmp':
             port = 1935
-    else:
-        port = int(server_and_port[1])
+
     if port > 0:
         cmd = F'nmap -sT -n --max-rtt-timeout 1 --max-scan-delay 1ms --host-timeout 2 -Pn -p {port} {server}'
     else:
