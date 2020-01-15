@@ -81,6 +81,7 @@ def get_url_uuid(url):
         return ''
 
 def resort_playlist():
+    global debug
     i = 0
     for item in playlist:
         if item.flag == int(Flag.OUTPUT):
@@ -95,8 +96,8 @@ def resort_playlist():
             for j in range(i + 1, len(playlist)):
                 if found_group:
                     if item.group != playlist[j].group:
-                        if need_check_service_status:
-                            print(F'      Checking to add: {item.title} ...{" ":40}')
+                        if need_check_service_status and debug:
+                            print(F'      Checking to add: {item.title} ...')
                         if ((need_check_service_status  and chk_service_status(item.path) or not need_check_service_status)):
                             item.flag |= int(Flag.OUTPUT)
                             playlist.insert(j - 1, item)
@@ -122,20 +123,20 @@ def chk_service_status(url):
         try:
             session.trust_env = False
             start = datetime.datetime.now()
-            request = session.get(url, headers = userAgent, timeout = (10,5))
+            request = session.get(url, headers = userAgent, timeout = (10,5), stream=True)
             end = datetime.datetime.now()
             httpStatusCode = request.status_code
             if request.status_code == 200:
                 if debug:
                     print(F'OK ({(end-start).seconds})')
                 return True
-        except  (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError,urllib3.exceptions.MaxRetryError, urllib3.exceptions.ReadTimeoutError):
+        except  (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError, urllib3.exceptions.MaxRetryError, urllib3.exceptions.ReadTimeoutError):
             if os.environ.get(protocol+'_proxy') is not None and os.environ[protocol+'_proxy'] != "":
                 try:
                     session = requests.Session()
                     session.trust_env = True
                     start2 = datetime.datetime.now()
-                    request = session.get(url, headers = userAgent, timeout = (15,5))
+                    request = session.get(url, headers = userAgent, timeout = (15,5), stream=True)
                     end = datetime.datetime.now()
                     httpStatusCode = request.status_code
                     if request.status_code == 200:
@@ -144,6 +145,9 @@ def chk_service_status(url):
                         return True
                 except:
                     end = datetime.datetime.now()
+                if debug:
+                    print(F'[P]OFFLINE ({(end-start2).seconds})')
+                return False
         except:
             end = datetime.datetime.now()
 
