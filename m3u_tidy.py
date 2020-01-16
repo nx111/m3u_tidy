@@ -67,6 +67,15 @@ def shutdown_me(signum, frame):
     print('')
     exit()
 
+def ansi_len(s):
+    iLen = 0
+    for c in s:
+        if '\u4e00' <= c <= '\u9fa5':
+            iLen += 2
+        else:
+            iLen += 1
+    return iLen
+
 def isdsd(url):
     result = re.search(r'\/dsdtv\/', url) != None
     if re.search(r'\/\/cloud-play\.hhalloy\.com\/live\/', url) != None:
@@ -298,12 +307,12 @@ def parsem3u(infile, need):
 
             title = title.strip()
             process_msg = F'      processed: {percent:2}%  processing: '
-            if output_line_maxlen < (len(process_msg) + len(title)):
-               output_line_maxlen = len(process_msg) + len(title)
+            if output_line_maxlen < (ansi_len(process_msg) + ansi_len(title)):
+               output_line_maxlen = ansi_len(process_msg) + ansi_len(title) + 2
             if debug and need:
-                print(process_msg + F'{title:{output_line_maxlen - len(process_msg)}}')
+                print(process_msg + F'{title:{output_line_maxlen - ansi_len(process_msg)}}')
             else:
-                print(process_msg + F'{title:{output_line_maxlen - len(process_msg)}}', end='\r')
+                print(process_msg + F'{title:{output_line_maxlen - ansi_len(process_msg)}}', end='\r')
             name = ""
             group = ""
             logo = ""
@@ -494,12 +503,12 @@ def parsetxt(infile, need):
             path = line.split(',')[1].strip()
 
             process_msg = F'      processed: {percent:2}%  processing: '
-            if output_line_maxlen < (len(process_msg) + len(title)):
-               output_line_maxlen = len(process_msg) + len(title)
+            if output_line_maxlen < (ansi_len(process_msg) + ansi_len(title)):
+               output_line_maxlen = ansi_len(process_msg) + ansi_len(title)
             if debug and need:
-                print(process_msg + F'{title:{output_line_maxlen - len(process_msg)}}')
+                print(process_msg + F'{title:{output_line_maxlen - ansi_len(process_msg)}}')
             else:
-                print(process_msg + F'{title:{output_line_maxlen - len(process_msg)}}', end='\r')
+                print(process_msg + F'{title:{output_line_maxlen - ansi_len(process_msg)}}', end='\r')
 
             title_mapped = False
             for mapitem in service_map:
