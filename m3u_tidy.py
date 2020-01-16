@@ -205,7 +205,7 @@ def parse_service_map(infile):
                 continue
         name,nick = line.split(',')
         name = name.strip()
-        nick = nick.strip().split(' ')[0].split('#')[0].strip()
+        nick = nick.strip().split('#')[0].strip()
         found = False
         for item in service_map:
             if item != None and item.name == name and item.nickname == nick \
@@ -350,7 +350,7 @@ def parsem3u(infile, need):
             title_mapped = False
             for mapitem in service_map:
                 if mapitem.flag == Flag.MAP_CHANNEL and mapitem.nickname.upper() == song.title.upper():
-                    song.title == mapitem.name
+                    song.title = mapitem.name
                     title_mapped = True
                     break
             for mapitem in service_map:
@@ -502,7 +502,7 @@ def parsetxt(infile, need):
             title_mapped = False
             for mapitem in service_map:
                 if mapitem.flag == Flag.MAP_CHANNEL and mapitem.nickname.upper() == title.upper():
-                    title == mapitem.name
+                    title = mapitem.name
                     title_mapped = True
                     break
 
