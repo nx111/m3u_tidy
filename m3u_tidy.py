@@ -118,8 +118,9 @@ def chk_service_status(url, tries = 1, proxy = False):
     if debug and tries == 1:
         print(F'          {url} ', flush=True, end='')
     if protocol == 'http' or protocol == 'https':
-        userAgent = {"user-agent": "Mozilla/5.0 (X11; Linux x86_64; rv:72.0) Gecko/20100101 Firefox/72.0"}
+        userAgent = {"user-agent": "Mozilla/5.0 (X11; Linux x86_64; rv:72.0) Gecko/20100101 Firefox/72.0", 'Connection':'close'}
         session = requests.Session()
+        session.keep_alive = False
         try:
             if proxy == True:
                 session.trust_env = True
@@ -139,12 +140,12 @@ def chk_service_status(url, tries = 1, proxy = False):
                         print(F'   OK ({(end-start).seconds})')
                 return True
         except  (requests.exceptions.ConnectTimeout,  urllib3.exceptions.ReadTimeoutError):
-            if tries == 1:
-                return chk_service_status(url, tries = 2, proxy = True)
+            if tries <= 2:
+                return chk_service_status(url, tries + 1, proxy = True)
         except  (urllib3.exceptions.MaxRetryError,requests.exceptions.ConnectionError):
-            time.sleep(15)
-            if tries == 1:
-                return chk_service_status(url, tries = 2, proxy = proxy)
+            time.sleep(10)
+            if tries <= 3:
+                return chk_service_status(url, tries + 1, proxy = proxy)
         except:
             pass
 
