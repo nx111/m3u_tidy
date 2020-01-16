@@ -4,7 +4,7 @@
 
 import sys, os, subprocess, signal
 import re
-import requests, urllib3, datetime
+import requests, urllib3, datetime, time
 from math import floor
 from zhconv.zhconv import convert
 from enum import Enum, unique
@@ -108,51 +108,51 @@ def resort_playlist():
 
         i = i + 1
 
-def chk_service_status(url):
+def chk_service_status(url, tries = 1, proxy = False):
     global debug
     url_base_items = url.split("://")
     protocol = url_base_items[0]
     if protocol not in supports_chk:
         return True
-
-    if debug:
+    if debug and tries == 1:
         print(F'          {url} ', flush=True, end='')
     if protocol == 'http' or protocol == 'https':
         userAgent = {"user-agent": "Mozilla/5.0 (X11; Linux x86_64; rv:72.0) Gecko/20100101 Firefox/72.0"}
         session = requests.Session()
         try:
-            session.trust_env = False
+            if proxy == True:
+                session.trust_env = True
+                timeout = 15
+            else:
+                session.trust_env = False
+                timeout = 30
             start = datetime.datetime.now()
-            request = session.get(url, headers = userAgent, timeout = (10,5), stream=True)
+            request = session.get(url, headers = userAgent, timeout = timeout, stream=True)
             end = datetime.datetime.now()
             httpStatusCode = request.status_code
             if request.status_code == 200:
                 if debug:
-                    print(F'OK ({(end-start).seconds})')
+                    if proxy:
+                        print(F'[P]OK ({(end-start).seconds})')
+                    else:
+                        print(F'   OK ({(end-start).seconds})')
                 return True
-        except  (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError, urllib3.exceptions.MaxRetryError, urllib3.exceptions.ReadTimeoutError):
-            if os.environ.get(protocol+'_proxy') is not None and os.environ[protocol+'_proxy'] != "":
-                try:
-                    session = requests.Session()
-                    session.trust_env = True
-                    start2 = datetime.datetime.now()
-                    request = session.get(url, headers = userAgent, timeout = (15,5), stream=True)
-                    end = datetime.datetime.now()
-                    httpStatusCode = request.status_code
-                    if request.status_code == 200:
-                        if debug:
-                            print(F'[P]OK ({(end-start2).seconds})')
-                        return True
-                except:
-                    end = datetime.datetime.now()
-                if debug:
-                    print(F'[P]OFFLINE ({(end-start2).seconds})')
-                return False
+        except  (requests.exceptions.ConnectTimeout,  urllib3.exceptions.ReadTimeoutError):
+            if tries == 1:
+                return chk_service_status(url, tries = 2, proxy = True)
+        except  (urllib3.exceptions.MaxRetryError,requests.exceptions.ConnectionError):
+            time.sleep(15)
+            if tries == 1:
+                return chk_service_status(url, tries = 2, proxy = proxy)
         except:
-            end = datetime.datetime.now()
+            pass
 
+        end = datetime.datetime.now()
         if debug:
-            print(F'OFFLINE ({(end-start).seconds})')
+            if proxy:
+                print(F'[P]OFFLINE ({(end-start).seconds})')
+            else:
+                print(F'   OFFLINE ({(end-start).seconds})')
         return False
 
     # for other protocols
@@ -166,7 +166,6 @@ def chk_service_status(url):
     else :
         if protocol == 'rtmp':
             port = 1935
-
     if port > 0:
         cmd = F'nmap -sT -n --max-rtt-timeout 1 --max-scan-delay 1ms --host-timeout 2 -Pn -p {port} {server}'
     else:
@@ -350,7 +349,7 @@ def parsem3u(infile, need):
 
             title_mapped = False
             for mapitem in service_map:
-                if mapitem.flag == Flag.MAP_CHANNEL and mapitem.nickname == song.title:
+                if mapitem.flag == Flag.MAP_CHANNEL and mapitem.nickname.upper() == song.title.upper():
                     song.title == mapitem.name
                     title_mapped = True
                     break
@@ -392,7 +391,7 @@ def parsem3u(infile, need):
                         if item.id != "":
                             song.id = item.id
                         if not title_mapped:
-                            song.title = re.sub('-| ', '', re.sub(r'(?P<xdian>[^电])台$|HD$|高清$','\g<xdian>', convert(song.title,"zh-cn"))) 
+                            song.title = re.sub('-| ', '', re.sub(r'(?P<xdian>[^电]{3,})台$|HD$|高清$','\g<xdian>', convert(song.title,"zh-cn"))).strip()
                         break
 
             if song.name == "" or (force_get_name):
@@ -409,11 +408,11 @@ def parsem3u(infile, need):
                         if item.id != "":
                             song.id = item.id
                         if not title_mapped:
-                            song.title = re.sub(r'台$|臺$','', song.title)
+                            song.title = re.sub(r'(?P<xdian>[^电]{3,})台$|HD$|高清$','\g<xdian>', song.title).strip()
                         break
 
             if song.name == "" and need:
-               song.name = re.sub(r'(?P<xdian>[^电])台$|HD$|\s*\[dsd\]$','\g<xdian>', convert(song.title,"zh-cn"))
+               song.name = re.sub(r'(?P<xdian>[^电]{3,})台$|HD$|\s*\[dsd\]$','\g<xdian>', convert(song.title,"zh-cn")).strip()
                if song.name[0:5] == 'CCTV-' or song.name[0:5] == 'CCTV_':
                    song.name = song.name[0:4] + song.name[5:]
 
@@ -422,7 +421,7 @@ def parsem3u(infile, need):
                   song.title += ' '
                song.title += '[dsd]'
             elif action_dsd == 'unmark':
-               song.title = re.sub(r'(?P<xdian>)\s*\[dsd\]$','\g<xdian>', song.title)
+               song.title = re.sub(r'(?P<xdian>)\s*\[dsd\]$','\g<xdian>', song.title).strip()
             elif action_dsd == 'remove' and isdsd(song.path):
                 song.path = ''
 
@@ -502,7 +501,7 @@ def parsetxt(infile, need):
 
             title_mapped = False
             for mapitem in service_map:
-                if mapitem.flag == Flag.MAP_CHANNEL and mapitem.nickname == title:
+                if mapitem.flag == Flag.MAP_CHANNEL and mapitem.nickname.upper() == title.upper():
                     title == mapitem.name
                     title_mapped = True
                     break
@@ -604,7 +603,7 @@ def parsetxt(infile, need):
                    path += '#'
                path += dsdurl
             if not title_mapped:
-                title = re.sub('(?P<xdian>[^电])台$|HD$|高清$','\g<xdian>', convert(title, "zh-cn"))
+                title = re.sub('(?P<xdian>[^电]{3,})台$|HD$|高清$','\g<xdian>', convert(title, "zh-cn")).strip()
             if path != '':
                 if need:
                     song=track(0, group, None, None, None, title, path, None, int(Flag.OUTPUT), None)
