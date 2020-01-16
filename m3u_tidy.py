@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 # more info on the M3U file format available here:
 # http://n4k3d.com/the-m3u-file-format/
