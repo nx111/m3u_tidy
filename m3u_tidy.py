@@ -407,11 +407,11 @@ def parsem3u(infile, need):
 
             if song.name == "" or (force_get_name):
                 for item in playlist:
-                    if re.sub('-| ', '', re.sub(r'(?P<xdian>[^电])台$|HD$|高清$|频道$|\s*\[dsd\]$','\g<xdian>', convert(song.title,"zh-cn"))) \
-                       == re.sub('-| ', '', re.sub(r'(?P<xdian>[^电])台$|HD$|高清$|频道$|\s*\[dsd\]$','\g<xdian>', convert(item.title,"zh-cn"))) \
+                    if re.sub('-| ', '', re.sub(r'(?P<xdian>[^电|^电视])台$|HD$|高清$|频道$|\s*\[dsd\]$','\g<xdian>', convert(song.title,"zh-cn"))) \
+                       == re.sub('-| ', '', re.sub(r'(?P<xdian>[^电|^电视])台$|HD$|高清$|频道$|\s*\[dsd\]$','\g<xdian>', convert(item.title,"zh-cn"))) \
                           or (item.name != "" and \
-                            re.sub(r'(?P<xdian>[^电])台$|HD$|频道$|\s*\[dsd\]$','\g<xdian>', convert(song.title,"zh-cn")) \
-                            == re.sub(r'(?P<xdian>[^电])台$|HD$|频道$','\g<xdian>', convert(item.name,"zh-cn"))):
+                            re.sub(r'(?P<xdian>[^电|^电视])台$|HD$|频道$|\s*\[dsd\]$','\g<xdian>', convert(song.title,"zh-cn")) \
+                            == re.sub(r'(?P<xdian>[^电|^电视])台$|HD$|频道$','\g<xdian>', convert(item.name,"zh-cn"))):
                         if item.name != "" and (song.name == "" or (song.name != "" and song.fixed_name != True)):
                             song.name = item.name
                         if item.logo != "":
@@ -419,11 +419,11 @@ def parsem3u(infile, need):
                         if item.id != "":
                             song.id = item.id
                         if not title_mapped:
-                            song.title = re.sub(r'(?P<xdian>[^电]{3,})台$|HD$|高清$','\g<xdian>', song.title).strip()
+                            song.title = re.sub(r'(?P<xdian>[^电|^电视]{3,})台$|HD$|高清$','\g<xdian>', song.title).strip()
                         break
 
             if song.name == "" and need:
-               song.name = re.sub(r'(?P<xdian>[^电]{3,})台$|HD$|\s*\[dsd\]$','\g<xdian>', convert(song.title,"zh-cn")).strip()
+               song.name = re.sub(r'(?P<xdian>[^电|^电视]{3,})台$|HD$|\s*\[dsd\]$','\g<xdian>', convert(song.title,"zh-cn")).strip()
                if song.name[0:5] == 'CCTV-' or song.name[0:5] == 'CCTV_':
                    song.name = song.name[0:4] + song.name[5:]
 
@@ -545,8 +545,8 @@ def parsetxt(infile, need):
                     continue
 
                 for list_item in playlist:
-                    if re.sub('-| ', '', re.sub(r'(?P<xdian>[^电])台$|HD$|高清$|频道$|\s*\[dsd\]$','\g<xdian>', convert(title, "zh-cn"))) \
-                            == re.sub('-| ', '', re.sub(r'(?P<xdian>[^电])台$|HD$|高清$|频道$|\s*\[dsd\]$','\g<xdian>', \
+                    if re.sub('-| ', '', re.sub(r'(?P<xdian>[^电|^电视])台$|HD$|高清$|频道$|\s*\[dsd\]$','\g<xdian>', convert(title, "zh-cn"))) \
+                            == re.sub('-| ', '', re.sub(r'(?P<xdian>[^电|^电视])台$|HD$|高清$|频道$|\s*\[dsd\]$','\g<xdian>', \
                                     convert(list_item.title, "zh-cn"))):
                         foundit = False
                         allow_write_back = (not flag_sync_to_reference) or (list_item.flag & int(Flag.REFERENCE)) == 0
@@ -614,7 +614,7 @@ def parsetxt(infile, need):
                    path += '#'
                path += dsdurl
             if not title_mapped:
-                title = re.sub('(?P<xdian>[^电]{3,})台$|HD$|高清$','\g<xdian>', convert(title, "zh-cn")).strip()
+                title = re.sub('(?P<xdian>[^电|^电视]{3,})台$|HD$|高清$','\g<xdian>', convert(title, "zh-cn")).strip()
             if path != '':
                 if need:
                     song=track(0, group, None, None, None, title, path, None, int(Flag.OUTPUT), None)
