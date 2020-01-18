@@ -407,6 +407,9 @@ def parsem3u(infile, need):
 
             if song.name == "" or (force_get_name):
                 for item in playlist:
+                    if re.search(r'\[测试\]|\[未分类\]|\[备用\]',item.group) != None and \
+                       re.search(r'\[测试\]|\[未分类\]|\[备用\]',song.group) == None:
+                        continue
                     if re.sub('-| ', '', re.sub(r'(?P<xdian>[^电|^电视])台$|HD$|高清$|频道$|\s*\[dsd\]$','\g<xdian>', convert(song.title,"zh-cn"))) \
                        == re.sub('-| ', '', re.sub(r'(?P<xdian>[^电|^电视])台$|HD$|高清$|频道$|\s*\[dsd\]$','\g<xdian>', convert(item.title,"zh-cn"))) \
                           or (item.name != "" and \
@@ -545,6 +548,9 @@ def parsetxt(infile, need):
                     continue
 
                 for list_item in playlist:
+                    if re.search(r'\[测试\]|\[未分类\]|\[备用\]',list_item.group) != None and \
+                       re.search(r'\[测试\]|\[未分类\]|\[备用\]',group) == None:
+                        continue
                     if re.sub('-| ', '', re.sub(r'(?P<xdian>[^电|^电视])台$|HD$|高清$|频道$|\s*\[dsd\]$','\g<xdian>', convert(title, "zh-cn"))) \
                             == re.sub('-| ', '', re.sub(r'(?P<xdian>[^电|^电视])台$|HD$|高清$|频道$|\s*\[dsd\]$','\g<xdian>', \
                                     convert(list_item.title, "zh-cn"))):
