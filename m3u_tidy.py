@@ -77,12 +77,18 @@ def ansi_len(s):
     return iLen
 
 def get_base_name(title, forTitle = False):
-    name = re.sub(r'\s*\[dsd\]$|\s*\[v\]$','', title)
+    name = re.sub(r'\s*\[v\]$','', title)
+    name = re.sub(r'\s*\[dsd\]$','', name)
     name = re.sub(r'\s\{1,\}备$','', name)
     if not forTitle:
         name = re.sub(r'\s*HD$|\s*高清$','', name)
         name = re.sub(r'(?P<xdian>[^电])台$|频道$','\g<xdian>', name)
-        name = re.sub(r'\s', '', name)
+        if name[0:4] == 'CCTV':
+            if name[4] == '-' or name[4] == '_':
+                name = name[0:4] + name[5:]
+            name = name.split(' ')[0]
+        else:
+            name = re.sub(r'\s', '', name)
     else:
         name = re.sub(r'\s*HD$|\s*高清$','', name)
         if re.search(r'电视台$', name) == None and re.search(r'台$',name) != None and len(name) > 3:
@@ -439,8 +445,6 @@ def parsem3u(infile, need):
 
             if song.name == "" and need:
                song.name = get_base_name(convert(song.title,"zh-cn")).strip()
-               if song.name[0:5] == 'CCTV-' or song.name[0:5] == 'CCTV_':
-                   song.name = song.name[0:4] + song.name[5:]
 
             if action_dsd == 'mark' and isdsd(song.path) and re.search('\[dsd\]$', song.title) == None:
                if song.title[len(song.title) - 1].encode('UTF-8').isalpha():
@@ -516,9 +520,12 @@ def parsetxt(infile, need):
                 continue
 
             skipme = False
+            confirm = False
             title = line.split(',')[0].strip()
             path = line.split(',')[1].strip()
 
+            if re.search('\[v\]$',title) != None:
+                confirm = True
             process_msg = F'      processed: {percent:2}%  processing: '
             if output_line_maxlen < (ansi_len(process_msg) + ansi_len(title)):
                output_line_maxlen = ansi_len(process_msg) + ansi_len(title)
@@ -534,6 +541,10 @@ def parsetxt(infile, need):
                     title = mapitem.name
                     title_mapped = True
                     break
+
+            if not title_mapped:
+                title = get_base_name(convert(title, "zh-cn"), forTitle=True).strip()
+            name = get_base_name(convert(title,"zh-cn")).strip()
 
             urls = path.split('#')
             path = ''
@@ -573,7 +584,10 @@ def parsetxt(infile, need):
                         continue
 
                     if re.sub('-| ', '', get_base_name(convert(title, "zh-cn"))) \
-                            == re.sub('-| ', '', get_base_name(convert(list_item.title, "zh-cn"))):
+                            == re.sub('-| ', '', get_base_name(convert(list_item.title, "zh-cn"))) \
+                           or name == list_item.name:
+                        if list_item.flag == int(Flag.OUTPUT):
+                            title = list_item.title
                         foundit = False
                         allow_write_back = (not flag_sync_to_reference) or (list_item.flag & int(Flag.REFERENCE)) == 0
                         url_items = list_item.path.split("#")
@@ -650,13 +664,15 @@ def parsetxt(infile, need):
                if path != '':
                    path += '#'
                path += dsdurl
-            if not title_mapped:
-                title = get_base_name(convert(title, "zh-cn"), forTitle=True).strip()
+
+            if re.search(r'\[测试\]|\[未分类\]|\[备用\]',group) != None and confirm == True:
+                title += '[v]'
+
             if path != '':
                 if need:
-                    song=track(0, group, None, None, None, title, path, None, int(Flag.OUTPUT), None)
+                    song=track(0, group, None, name, None, title, path, None, int(Flag.OUTPUT), None)
                 else:
-                    song=track(0, group, None, None, None, title, path, None, int(Flag.REFERENCE), None)
+                    song=track(0, group, None, name, None, title, path, None, int(Flag.REFERENCE), None)
 
                 if not skipme:
                     playlist.append(song)
