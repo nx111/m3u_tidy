@@ -527,6 +527,7 @@ def parsetxt(infile, need):
             else:
                 print(process_msg + F'{title:{output_line_maxlen - ansi_len(process_msg)}}', end='\r')
 
+            output_line_maxlen = ansi_len(process_msg) + ansi_len(title)
             title_mapped = False
             for mapitem in service_map:
                 if mapitem.flag == Flag.MAP_CHANNEL and mapitem.nickname.upper() == title.upper():
