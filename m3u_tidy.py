@@ -275,7 +275,6 @@ def parsem3u(infile, need):
     # initialize playlist variables before reading file
     song=track(None, None, None, None, None, None, None, None, None, None)
     line_no = 0
-    output_line_maxlen = 0
     for line in infile:
         skip_line = False
         line=line.strip()
@@ -326,12 +325,10 @@ def parsem3u(infile, need):
 
             title = title.strip()
             process_msg = F'      processed: {percent:2}%  processing: '
-            if output_line_maxlen < (ansi_len(process_msg) + ansi_len(title)):
-               output_line_maxlen = ansi_len(process_msg) + ansi_len(title) + 2
             if debug and need:
-                print(process_msg + F'{title:{output_line_maxlen - ansi_len(process_msg)}}')
+                print(process_msg + F'{title[0:20]:20}')
             else:
-                print(process_msg + F'{title:{output_line_maxlen - ansi_len(process_msg)}}', end='\r')
+                print(process_msg + F'{title[0:20]:20}', end='\r')
             name = ""
             group = ""
             logo = ""
@@ -497,7 +494,6 @@ def parsetxt(infile, need):
     song=track(None, None, None, None, None, None, None, None, None, None)
     group = ""
     line_no = 0
-    output_line_maxlen = 0
     for line in infile:
         line_no += 1
         percent = floor((line_no * 100) / maxLines)
@@ -527,14 +523,11 @@ def parsetxt(infile, need):
             if re.search('\[v\]$',title) != None:
                 confirm = True
             process_msg = F'      processed: {percent:2}%  processing: '
-            if output_line_maxlen < (ansi_len(process_msg) + ansi_len(title)):
-               output_line_maxlen = ansi_len(process_msg) + ansi_len(title)
             if debug and need:
-                print(process_msg + F'{title:{output_line_maxlen - ansi_len(process_msg)}}')
+                print(process_msg + F'{title[0:20]:20}')
             else:
-                print(process_msg + F'{title:{output_line_maxlen - ansi_len(process_msg)}}', end='\r')
+                print(process_msg + F'{title[0:20]:20}', end='\r')
 
-            output_line_maxlen = ansi_len(process_msg) + ansi_len(title)
             title_mapped = False
             for mapitem in service_map:
                 if mapitem.flag == Flag.MAP_CHANNEL and mapitem.nickname.upper() == title.upper():
