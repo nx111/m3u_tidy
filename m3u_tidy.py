@@ -22,6 +22,7 @@ flag_sync_to_reference = False
 map_file = ''
 action_dsd = ''
 debug = False
+filter_url = ''
 
 @unique
 class Flag(Enum):
@@ -86,7 +87,8 @@ def get_base_name(title, forTitle = False):
         if name[0:4] == 'CCTV':
             if name[4] == '-' or name[4] == '_':
                 name = name[0:4] + name[5:]
-            name = name.split(' ')[0]
+            if name[4].isdigit():
+                name = name.split(' ')[0]
         else:
             name = re.sub(r'\s', '', name)
     else:
@@ -326,9 +328,9 @@ def parsem3u(infile, need):
             title = title.strip()
             process_msg = F'      processed: {percent:2}%  processing: '
             if debug and need:
-                print(process_msg + F'{title[0:20]:20}')
+                print(process_msg + F'{title[0:20]:40}')
             else:
-                print(process_msg + F'{title[0:20]:20}', end='\r')
+                print(process_msg + F'{title[0:20]:40}', end='\r')
             name = ""
             group = ""
             logo = ""
@@ -524,9 +526,9 @@ def parsetxt(infile, need):
                 confirm = True
             process_msg = F'      processed: {percent:2}%  processing: '
             if debug and need:
-                print(process_msg + F'{title[0:20]:20}')
+                print(process_msg + F'{title[0:20]:40}')
             else:
-                print(process_msg + F'{title[0:20]:20}', end='\r')
+                print(process_msg + F'{title[0:20]:40}', end='\r')
 
             title_mapped = False
             for mapitem in service_map:
@@ -559,8 +561,15 @@ def parsetxt(infile, need):
                             urls[j] = os.path.splitext(re.sub(r'\$.*', '', urls[j]))[0] + '.m3u8' + label
                         break
                     j += 1
-
-                if foundme or (need_check_service_status and need and chk_service_status(item) == False):
+                will_be_filter = False
+                if filter_url != '':
+                    filters = filter_url.split(';')
+                    for filter_iter in filters:
+                        if (re.search(r'://',filter_iter) != None and item[0:len(filter_url)] == filter_iter) or \
+                           (re.search(r'://',filter_iter) == None and item.find(filter_iter) != -1):
+                               will_be_filter = True
+                               break
+                if foundme or (need_check_service_status and need and chk_service_status(item) == False) or will_be_filter:
                     urls[i] = ''
                     i += 1
                     continue
@@ -658,7 +667,7 @@ def parsetxt(infile, need):
                    path += '#'
                path += dsdurl
 
-            if re.search(r'\[测试\]|\[未分类\]|\[备用\]',group) != None and confirm == True:
+            if (re.search(r'\[测试\]|\[未分类\]|\[备用\]',group) != None or group == '') and confirm == True:
                 title += '[v]'
 
             if path != '':
@@ -681,13 +690,14 @@ def parsetxt(infile, need):
 # get the M3U file path from the first command line argument
 def main():
     global force_get_name, need_check_service_status, map_file, flag_sync_to_reference, action_dsd
-    global debug
+    global debug,filter_url
 
     i = 0
     lastop = ''
     reference_file = ''
     input_file = ''
     map_file = ''
+    filter_url = ''
 
     signal.signal(signal.SIGINT, shutdown_me)
     signal.signal(signal.SIGTERM, shutdown_me)
@@ -716,6 +726,8 @@ def main():
         elif op == "--remove-dsd":
             if action_dsd == '':
                 action_dsd = "remove"
+        elif lastop == "--remove-source":
+            filter_url=op
         elif op == "--debug":
             debug = True
         elif op != "-r" and op != "-f":
@@ -730,6 +742,8 @@ def main():
         print("       -c|--check  drop offline channel source.");
         print("       --mark-dsd | --unmark-dsd | --remove-dsd")
         print("                   mark channel that service from dian_shi_duo")
+        print("       --remove-source <server url>")
+        print("                   remove source that match server_url.multiple filters separated by ';'")
         print("")
         print("       ps: reference file and input file can be m3u or txt file.");
         print("       service map format: line format is \"<target title>,<source title>\".");
