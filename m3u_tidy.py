@@ -23,6 +23,7 @@ map_file = ''
 action_dsd = ''
 debug = False
 filter_url = ''
+prefer_url = ''
 
 @unique
 class Flag(Enum):
@@ -131,8 +132,7 @@ def resort_playlist():
                             print(F'      Checking to add: {item.title} ...')
                         if ((need_check_service_status  and chk_service_status(item.path) or not need_check_service_status)):
                             item.flag |= int(Flag.OUTPUT)
-                            playlist.insert(j - 1, item)
-                            playlist.remove(playlist[i])
+                            playlist.insert(j - 1, playlist.pop(i))
                             break
                 elif item.group == playlist[j].group and item.flag == int(Flag.OUTPUT):
                     found_group = True
@@ -473,7 +473,7 @@ def parsem3u(infile, need):
     return playlist
 
 def parsetxt(infile, need):
-    global lineEnds, flag_sync_to_reference, action_dsd, debug
+    global lineEnds, flag_sync_to_reference, action_dsd, debug, prefer_url
 
     ifile = infile
     try:
@@ -581,9 +581,6 @@ def parsetxt(infile, need):
                         re.search(r'\[v\]$', list_item.title) == None:
                         j += 1
                         continue
-                    if list_item == item:
-                        j += 1
-                        continue
 
                     if re.sub('-| ', '', get_base_name(convert(title, "zh-cn"))) \
                             == re.sub('-| ', '', get_base_name(convert(list_item.title, "zh-cn"))) \
@@ -591,7 +588,7 @@ def parsetxt(infile, need):
                         if list_item.flag == int(Flag.OUTPUT):
                             title = list_item.title
                         foundit = False
-                        allow_write_back = (not flag_sync_to_reference) or (list_item.flag & int(Flag.REFERENCE)) == 0
+                        allow_write_back = (not flag_sync_to_reference) or ((list_item.flag & int(Flag.REFERENCE)) == 0)
                         url_items = list_item.path.split("#")
                         jj = 0
                         for url_item in url_items:
@@ -635,10 +632,14 @@ def parsetxt(infile, need):
                             list_item.flag |= int(Flag.UPDATED)
 
                         if playlist[j].path != list_item.path:
-                            playlist.remove(list_item)
+                            playlist.pop(j)
                             playlist.insert(j, list_item)
 
                     j += 1
+                if prefer_url != '':
+                    if (re.search(r'://',prefer_url) != None and item[0:len(prefer_url)] == prefer_url) or \
+                       (re.search(r'://',prefer_url) == None and item.find(prefer_url) != -1):
+                           urls.insert(0, urls.pop(i))
 
                 i += 1
 
@@ -690,7 +691,7 @@ def parsetxt(infile, need):
 # get the M3U file path from the first command line argument
 def main():
     global force_get_name, need_check_service_status, map_file, flag_sync_to_reference, action_dsd
-    global debug,filter_url
+    global debug,filter_url,prefer_url
 
     i = 0
     lastop = ''
@@ -698,6 +699,7 @@ def main():
     input_file = ''
     map_file = ''
     filter_url = ''
+    prefer_url = ''
 
     signal.signal(signal.SIGINT, shutdown_me)
     signal.signal(signal.SIGTERM, shutdown_me)
@@ -728,6 +730,8 @@ def main():
                 action_dsd = "remove"
         elif lastop == "--remove-source":
             filter_url=op
+        elif lastop == "--prefer":
+            prefer_url=op
         elif op == "--debug":
             debug = True
         elif op != "-r" and op != "-f":
@@ -744,6 +748,8 @@ def main():
         print("                   mark channel that service from dian_shi_duo")
         print("       --remove-source <server url>")
         print("                   remove source that match server_url.multiple filters separated by ';'")
+        print("       --prefer <server url>")
+        print("                   move the matched serve url to the first of channel urls.")
         print("")
         print("       ps: reference file and input file can be m3u or txt file.");
         print("       service map format: line format is \"<target title>,<source title>\".");
